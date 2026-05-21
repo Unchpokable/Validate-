@@ -1,0 +1,29 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# ── Qt6 resolution (baked in at build time) ────────────────────────────────────
+# VALIDATE_QT_COMPONENTS_REQUIRED is substituted by configure_package_config_file.
+# It is empty when no Qt extensions were built, so find_dependency is skipped.
+set(_validate_qt_deps "@VALIDATE_QT_COMPONENTS_REQUIRED@")
+
+if(_validate_qt_deps)
+    # Configurable Qt6 path for consuming projects — mirrors the build-time knob.
+    # Priority: VD_QT_DIR (explicit) > QTDIR (environment) > system search paths.
+    set(VD_QT_DIR "" CACHE PATH
+        "Path to Qt6 installation directory. \
+Falls back to the QTDIR environment variable when not set."
+    )
+
+    if(VD_QT_DIR)
+        list(PREPEND CMAKE_PREFIX_PATH "${VD_QT_DIR}")
+    elseif(DEFINED ENV{QTDIR})
+        list(PREPEND CMAKE_PREFIX_PATH "$ENV{QTDIR}")
+    endif()
+
+    find_dependency(Qt6 COMPONENTS ${_validate_qt_deps})
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/ValidateTargets.cmake")
+
+check_required_components(Validate)

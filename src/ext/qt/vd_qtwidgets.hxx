@@ -1,0 +1,6 @@
+#pragma once
+
+#ifndef VD_EXTENSION_QT_WIDGETS_HXX
+#define VD_EXTENSION_QT_WIDGETS_HXX
+
+#endif // VD_EXTENSION_QT_WIDGETS_HXX
