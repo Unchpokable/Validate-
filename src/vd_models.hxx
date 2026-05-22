@@ -6,5 +6,6 @@
 #include "models/vd_basic_model.hxx"
 #include "models/vd_numeric.hxx"
 #include "models/vd_rule.hxx"
+#include "models/vd_string_rules.hxx"
 
 #endif // VD_MODELS_HXX

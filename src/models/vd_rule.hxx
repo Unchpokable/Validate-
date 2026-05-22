@@ -24,7 +24,7 @@ struct member_class<V T::*> {
 template<typename Ptr>
 using member_class_t = typename member_class<std::remove_cvref_t<Ptr>>::type;
 
-namespace details
+namespace detail
 {
 // Extracts the first argument type from a non-generic callable (e.g. non-mutable lambda).
 template<typename Fn>
@@ -39,25 +39,30 @@ template<typename C, typename R, typename Arg, typename... Rest>
 struct first_arg_of<R (C::*)(Arg, Rest...) const noexcept> {
     using type = std::remove_cvref_t<Arg>;
 };
-} // namespace details
+} // namespace detail
 
 // Checker concept: any callable V -> bool-convertible.
 template<typename Checker, typename V>
-concept value_checker = std::invocable<Checker, V>
-    && std::convertible_to<std::invoke_result_t<Checker, V>, bool>;
+concept value_checker = std::invocable<Checker, V> && std::convertible_to<std::invoke_result_t<Checker, V>, bool>;
 
 // ---------------------------------------------------------------------------
 
 template<typename T>
 struct rule {
     template<typename Fn>
-    requires std::invocable<Fn, const T&>
-          && std::convertible_to<std::invoke_result_t<Fn, const T&>, bool>
+    requires std::invocable<Fn, const T&> && std::convertible_to<std::invoke_result_t<Fn, const T&>, bool>
     explicit rule(Fn&& fn) : m_predicate(std::forward<Fn>(fn))
-    {}
+    {
+    }
 
-    bool operator()(const T& obj) const { return m_predicate(obj); }
-    bool operator()(const T* obj) const { return m_predicate(*obj); }
+    bool operator()(const T& obj) const
+    {
+        return m_predicate(obj);
+    }
+    bool operator()(const T* obj) const
+    {
+        return m_predicate(*obj);
+    }
 
 private:
     std::function<bool(const T&)> m_predicate;
@@ -94,9 +99,9 @@ auto member(MemberPtr ptr, Checker checker) -> rule<member_class_t<MemberPtr>>
 // For generic lambdas or std::function, construct rule<T> directly.
 // Example: vd::predicate([](const Foo& f) { return f.x > 0; })
 template<typename Fn>
-auto predicate(Fn fn) -> rule<typename details::first_arg_of<Fn>::type>
+auto predicate(Fn fn) -> rule<typename detail::first_arg_of<Fn>::type>
 {
-    using T = typename details::first_arg_of<Fn>::type;
+    using T = typename detail::first_arg_of<Fn>::type;
     return rule<T>(std::move(fn));
 }
 
