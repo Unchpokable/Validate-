@@ -3,17 +3,16 @@
 #ifndef VD_NUMERIC_HXX
 #define VD_NUMERIC_HXX
 
-#include <cmath>
 #include <concepts>
 #include <limits>
 #include <type_traits>
 
+#include "utils/vd_ctnextafter.hxx"
 #include "vd_basic_model.hxx"
 
 namespace vd
 {
-template<typename T>
-concept numeric = std::integral<T> || std::floating_point<T>;
+// vd::numeric is provided by vd_ctnextafter.hxx
 
 template<typename T>
 concept arithmetic = std::is_arithmetic_v<T>;
@@ -26,36 +25,36 @@ struct numeric_bounds final {
     const T min;
     const T max;
 
-    numeric_bounds(T min, T max) : min(min), max(max)
+    constexpr numeric_bounds(T min, T max) : min(min), max(max)
     {
     }
 
-    bool operator()(const T& value) const
+    constexpr bool operator()(const T& value) const
     {
         return value >= min && value <= max;
     }
 
-    static numeric_bounds<T> inclusive(T min, T max)
+    static constexpr numeric_bounds<T> inclusive(T min, T max)
     {
         return { min, max };
     }
 
-    static numeric_bounds<T> exclusive(T min, T max)
+    static constexpr numeric_bounds<T> exclusive(T min, T max)
     {
-        return { std::nextafter(min, std::numeric_limits<T>::max()), std::nextafter(max, std::numeric_limits<T>::lowest()) };
+        return { vd::ct_nextafter(min, std::numeric_limits<T>::max()), vd::ct_nextafter(max, std::numeric_limits<T>::lowest()) };
     }
 
-    static numeric_bounds<T> greater_than(T min)
+    static constexpr numeric_bounds<T> greater_than(T min)
     {
-        return { std::nextafter(min, std::numeric_limits<T>::max()), std::numeric_limits<T>::max() };
+        return { vd::ct_nextafter(min, std::numeric_limits<T>::max()), std::numeric_limits<T>::max() };
     }
 
-    static numeric_bounds<T> less_than(T max)
+    static constexpr numeric_bounds<T> less_than(T max)
     {
-        return { std::numeric_limits<T>::lowest(), std::nextafter(max, std::numeric_limits<T>::lowest()) };
+        return { std::numeric_limits<T>::lowest(), vd::ct_nextafter(max, std::numeric_limits<T>::lowest()) };
     }
 
-    static numeric_bounds<T> unbounded()
+    static constexpr numeric_bounds<T> unbounded()
     {
         return { std::numeric_limits<T>::lowest(), std::numeric_limits<T>::max() };
     }

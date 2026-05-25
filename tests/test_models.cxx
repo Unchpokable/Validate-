@@ -91,6 +91,124 @@ TEST(NumericBoundsTest, UnboundedAcceptsAnyValue)
 }
 
 // ---------------------------------------------------------------------------
+// numeric_bounds — integer exclusive/greater_than/less_than
+// std::nextafter is float-only; for integral T the old code silently produced
+// inclusive semantics (nextafter(0, INT_MAX) -> 5e-324 -> truncated back to 0).
+// ct_nextafter steps by ±1 for integers, so these boundaries are now correct.
+// ---------------------------------------------------------------------------
+
+TEST(NumericBoundsTest, IntegerExclusiveRejectsBoundariesAcceptsInside)
+{
+    auto bounds = vd::int_bounds::exclusive(0, 10);
+    EXPECT_FALSE(bounds(0));
+    EXPECT_FALSE(bounds(10));
+    EXPECT_TRUE(bounds(1));
+    EXPECT_TRUE(bounds(9));
+    EXPECT_TRUE(bounds(5));
+    EXPECT_FALSE(bounds(-1));
+    EXPECT_FALSE(bounds(11));
+}
+
+TEST(NumericBoundsTest, IntegerExclusiveAdjacentOnlyValueAccepted)
+{
+    // exclusive(5, 7) accepts only 6 — the single integer strictly between 5 and 7.
+    auto bounds = vd::int_bounds::exclusive(5, 7);
+    EXPECT_FALSE(bounds(5));
+    EXPECT_TRUE(bounds(6));
+    EXPECT_FALSE(bounds(7));
+}
+
+TEST(NumericBoundsTest, IntegerGreaterThanStepsByOne)
+{
+    auto bounds = vd::int_bounds::greater_than(5);
+    EXPECT_FALSE(bounds(5));
+    EXPECT_FALSE(bounds(4));
+    EXPECT_TRUE(bounds(6));
+    EXPECT_TRUE(bounds(std::numeric_limits<int32_t>::max()));
+}
+
+TEST(NumericBoundsTest, IntegerLessThanStepsByOne)
+{
+    auto bounds = vd::int_bounds::less_than(5);
+    EXPECT_FALSE(bounds(5));
+    EXPECT_FALSE(bounds(6));
+    EXPECT_TRUE(bounds(4));
+    EXPECT_TRUE(bounds(std::numeric_limits<int32_t>::min()));
+}
+
+// ---------------------------------------------------------------------------
+// numeric_bounds — float/double exclusive immediate neighbor
+// The bound is set to the representable value adjacent to the endpoint, so the
+// immediate neighbor must be accepted and the endpoint itself rejected.
+// ---------------------------------------------------------------------------
+
+TEST(NumericBoundsTest, DoubleExclusiveAcceptsImmediateNeighbor)
+{
+    auto bounds = vd::double_bounds::exclusive(0.0, 1.0);
+    EXPECT_TRUE(bounds(std::nextafter(0.0, 1.0)));
+    EXPECT_TRUE(bounds(std::nextafter(1.0, 0.0)));
+}
+
+TEST(NumericBoundsTest, FloatExclusiveAcceptsImmediateNeighbor)
+{
+    auto bounds = vd::float_bounds::exclusive(0.0f, 1.0f);
+    EXPECT_FALSE(bounds(0.0f));
+    EXPECT_FALSE(bounds(1.0f));
+    EXPECT_TRUE(bounds(std::nextafter(0.0f, 1.0f)));
+    EXPECT_TRUE(bounds(std::nextafter(1.0f, 0.0f)));
+}
+
+// ---------------------------------------------------------------------------
+// numeric_bounds — constexpr evaluation
+// All six factory methods and operator() must be usable in constant expressions.
+// ---------------------------------------------------------------------------
+
+TEST(NumericBoundsConstexprTest, InclusiveEvaluatesAtCompileTime)
+{
+    constexpr auto bounds = vd::int_bounds::inclusive(0, 10);
+    static_assert(bounds(0));
+    static_assert(bounds(10));
+    static_assert(bounds(5));
+    static_assert(!bounds(-1));
+    static_assert(!bounds(11));
+    SUCCEED();
+}
+
+TEST(NumericBoundsConstexprTest, ExclusiveEvaluatesAtCompileTime)
+{
+    constexpr auto bounds = vd::int_bounds::exclusive(0, 10);
+    static_assert(!bounds(0));
+    static_assert(!bounds(10));
+    static_assert(bounds(1));
+    static_assert(bounds(9));
+    static_assert(bounds(5));
+    SUCCEED();
+}
+
+TEST(NumericBoundsConstexprTest, GreaterThanEvaluatesAtCompileTime)
+{
+    constexpr auto bounds = vd::int_bounds::greater_than(5);
+    static_assert(!bounds(5));
+    static_assert(bounds(6));
+    SUCCEED();
+}
+
+TEST(NumericBoundsConstexprTest, LessThanEvaluatesAtCompileTime)
+{
+    constexpr auto bounds = vd::int_bounds::less_than(5);
+    static_assert(!bounds(5));
+    static_assert(bounds(4));
+    SUCCEED();
+}
+
+TEST(NumericBoundsConstexprTest, UnboundedEvaluatesAtCompileTime)
+{
+    constexpr auto bounds = vd::double_bounds::unbounded();
+    static_assert(bounds(0.0));
+    SUCCEED();
+}
+
+// ---------------------------------------------------------------------------
 // vd::rule — direct construction from callable
 // Verifies that rule<T> correctly wraps and invokes an arbitrary predicate.
 // ---------------------------------------------------------------------------

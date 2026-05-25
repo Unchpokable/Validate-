@@ -41,6 +41,8 @@ struct basic_model {
 
     basic_bound_model<T> bind(const_pointer_type object) const
     {
+        vd::require(object != nullptr, "Binding to nullptr objects is not allowed!");
+
         return basic_bound_model<T>::bind(*this, object);
     }
 
@@ -125,6 +127,10 @@ private:
 template<typename T>
 bool basic_model<T>::is_valid(const_pointer_type object) const
 {
+    if(object == nullptr) {
+        return false;
+    }
+
     for(const auto& r : m_rules) {
         if(!r(*object))
             return false;

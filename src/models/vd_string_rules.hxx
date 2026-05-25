@@ -23,9 +23,12 @@ template<auto Matcher>
 requires string_matcher<Matcher>
 struct string_match {
     enum class mode { include, exclude };
-    mode match_mode;
+    mode match_mode = mode::include;
 
-    bool operator()(std::string_view s) const
+    constexpr string_match() = default;
+    constexpr string_match(mode mode) : match_mode(mode) {};
+
+    constexpr bool operator()(std::string_view s) const
     {
         bool match = Matcher(s);
         return match_mode == mode::include ? match : !match;
@@ -46,23 +49,23 @@ struct regex_checker {
 
 namespace vd::string_rules::detail
 {
-inline bool empty_string(std::string_view s)
+constexpr bool empty_string(std::string_view s)
 {
     return s.empty();
 }
 
-inline bool non_empty_string(std::string_view s)
+constexpr bool non_empty_string(std::string_view s)
 {
     return !s.empty();
 }
 
-inline bool email_like(std::string_view s)
+constexpr bool email_like(std::string_view s)
 {
-    static constexpr auto pattern = ctll::fixed_string { R"(^\S+@\S+\.\S+$)" };
+    constexpr auto pattern = ctll::fixed_string { R"(^\S+@\S+\.\S+$)" };
     return ctre::match<pattern>(s);
 }
 
-inline bool empty_or_whitespace_string(std::string_view s)
+constexpr bool empty_or_whitespace_string(std::string_view s)
 {
     return s.find_first_not_of(" \t\n\r\f\v") == std::string_view::npos;
 }
@@ -79,9 +82,9 @@ inline bool std_regex(std::string_view s, std::string_view pattern)
     }
 }
 
-inline bool uri_like(std::string_view s)
+constexpr bool uri_like(std::string_view s)
 {
-    static constexpr auto pattern = ctll::fixed_string { R"(^\w+://\S+$)" };
+    constexpr auto pattern = ctll::fixed_string { R"(^\w+://\S+$)" };
     return ctre::match<pattern>(s);
 }
 } // namespace vd::string_rules::detail
@@ -94,22 +97,22 @@ inline bool regex_checker::operator()(std::string_view s) const
     return match_mode == mode::include ? matched : !matched;
 }
 
-inline string_match<detail::empty_string> empty()
+constexpr string_match<detail::empty_string> empty()
 {
     return { string_match<detail::empty_string>::mode::include };
 }
 
-inline string_match<detail::non_empty_string> non_empty()
+constexpr string_match<detail::non_empty_string> non_empty()
 {
     return { string_match<detail::non_empty_string>::mode::include };
 }
 
-inline string_match<detail::empty_or_whitespace_string> empty_or_whitespace()
+constexpr string_match<detail::empty_or_whitespace_string> empty_or_whitespace()
 {
     return { string_match<detail::empty_or_whitespace_string>::mode::include };
 }
 
-inline string_match<detail::email_like> email_like()
+constexpr string_match<detail::email_like> email_like()
 {
     return { string_match<detail::email_like>::mode::include };
 }
@@ -119,7 +122,7 @@ inline regex_checker regex(std::string pattern)
     return { std::move(pattern), regex_checker::mode::include };
 }
 
-inline string_match<detail::uri_like> uri_like()
+constexpr string_match<detail::uri_like> uri_like()
 {
     return { string_match<detail::uri_like>::mode::include };
 }
