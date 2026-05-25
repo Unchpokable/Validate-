@@ -33,4 +33,9 @@ if(TARGET Validate::vd_qt_base)
     # PRE_TEST: defer test discovery to ctest run time instead of MSBuild build time.
     # Without this, MSBuild would fail because Qt DLLs are not on PATH during the build step.
     gtest_discover_tests(test_qt_property DISCOVERY_MODE PRE_TEST)
+
+    add_executable(test_qt_qstring_rules test_qt_qstring_rules.cxx)
+    set_target_properties(test_qt_qstring_rules PROPERTIES AUTOMOC ON)
+    target_link_libraries(test_qt_qstring_rules PRIVATE Validate::vd_qt_base GTest::gtest_main)
+    gtest_discover_tests(test_qt_qstring_rules DISCOVERY_MODE PRE_TEST)
 endif()
