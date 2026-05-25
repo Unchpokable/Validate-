@@ -44,8 +44,7 @@ void on_fail(std::string msg)
     s_msg = std::move(msg);
 }
 
-class RequireCallbackTest : public ::testing::Test
-{
+class RequireCallbackTest : public ::testing::Test {
 protected:
     void SetUp() override
     {

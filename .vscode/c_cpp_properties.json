@@ -5,6 +5,7 @@
             "includePath": [
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/build/_deps/googletest-src/googletest/include",
+                "${env:QTDIR}/include/**"
             ],
             "defines": [
                 "_DEBUG",

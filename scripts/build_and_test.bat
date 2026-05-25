@@ -3,11 +3,21 @@ SETLOCAL ENABLEEXTENSIONS DISABLEDELAYEDEXPANSION
 
 :: ============================================================
 ::   Validate! - Build and Test Runner  (Windows Batch)
-::   Usage: scripts\build_and_test.bat [Debug|Release]
+::   Usage: scripts\build_and_test.bat [Debug|Release] [QtDir]
+::
+::   QtDir  Optional path to Qt installation directory.
+::          Overrides the QTDIR environment variable.
+::          When QtDir or QTDIR is set, VD_EXTENSION_QT_BASE
+::          is enabled and Qt DLLs are added to PATH.
+::          Example: scripts\build_and_test.bat Debug C:\Qt\6.9.2\msvc2022_64
 :: ============================================================
 
 SET "BUILD_CONFIG=%~1"
 IF "%BUILD_CONFIG%"=="" SET "BUILD_CONFIG=Debug"
+
+:: Resolve Qt directory: explicit arg > QTDIR env var
+SET "EFFECTIVE_QT_DIR=%~2"
+IF "%EFFECTIVE_QT_DIR%"=="" IF NOT "%QTDIR%"=="" SET "EFFECTIVE_QT_DIR=%QTDIR%"
 
 SET "SCRIPT_DIR=%~dp0"
 PUSHD "%SCRIPT_DIR%.."
@@ -19,6 +29,7 @@ IF ERRORLEVEL 1 (
 SET "BUILD_DIR=build"
 SET "BIN_DIR=%BUILD_DIR%\tests\%BUILD_CONFIG%"
 SET "FAILURES_FILE=%TEMP%\vd_test_failures.txt"
+SET "SUITE_COUNT=0"
 
 IF EXIST "%FAILURES_FILE%" DEL /Q "%FAILURES_FILE%"
 
@@ -26,13 +37,22 @@ echo.
 echo  ============================================================
 echo    Validate! - Build ^& Test Runner
 echo    Config: %BUILD_CONFIG%
+IF NOT "%EFFECTIVE_QT_DIR%"=="" echo    Qt:     %EFFECTIVE_QT_DIR%
 echo  ============================================================
 echo.
 
 :: ── Step 1: CMake configure ──────────────────────────────────
 IF NOT EXIST "%BUILD_DIR%\CMakeCache.txt" (
     echo [1/3] Running CMake configure...
-    cmake -B "%BUILD_DIR%"
+    IF NOT "%EFFECTIVE_QT_DIR%"=="" (
+        IF NOT "%~2"=="" (
+            cmake -B "%BUILD_DIR%" -DVD_EXTENSION_QT_BASE=ON -DVD_QT_DIR="%EFFECTIVE_QT_DIR%"
+        ) ELSE (
+            cmake -B "%BUILD_DIR%" -DVD_EXTENSION_QT_BASE=ON
+        )
+    ) ELSE (
+        cmake -B "%BUILD_DIR%"
+    )
     IF ERRORLEVEL 1 (
         echo.
         echo [ERROR] CMake configure failed.
@@ -40,7 +60,8 @@ IF NOT EXIST "%BUILD_DIR%\CMakeCache.txt" (
     )
 ) ELSE (
     echo [1/3] Build directory found - skipping configure.
-    echo       Delete '%BUILD_DIR%' to force reconfigure.
+    IF NOT "%EFFECTIVE_QT_DIR%"=="" echo       Hint: delete '%BUILD_DIR%' and re-run to apply Qt flags.
+    IF "%EFFECTIVE_QT_DIR%"=="" echo       Delete '%BUILD_DIR%' to force reconfigure.
 )
 echo.
 
@@ -54,20 +75,45 @@ IF ERRORLEVEL 1 (
 )
 echo.
 
-:: ── Step 3: Run tests ────────────────────────────────────────
-echo [3/3] Running tests...
+:: ── Qt DLL path ───────────────────────────────────────────────
+:: Priority: arg/QTDIR > VD_QT_DIR in CMakeCache.txt
+SET "QT_BIN_DIR="
+IF NOT "%EFFECTIVE_QT_DIR%"=="" (
+    SET "QT_BIN_DIR=%EFFECTIVE_QT_DIR%\bin"
+) ELSE IF EXIST "%BUILD_DIR%\CMakeCache.txt" (
+    FOR /F "tokens=2 delims==" %%V IN (
+        'FINDSTR /B "VD_QT_DIR:PATH=" "%BUILD_DIR%\CMakeCache.txt" 2^>NUL'
+    ) DO (
+        IF NOT "%%V"=="" SET "QT_BIN_DIR=%%V\bin"
+    )
+)
+
+IF NOT "%QT_BIN_DIR%"=="" IF EXIST "%QT_BIN_DIR%" (
+    echo   Qt DLLs: %QT_BIN_DIR%
+    SET "PATH=%QT_BIN_DIR%;%PATH%"
+    echo.
+)
+
+:: ── Step 3: Run tests ─────────────────────────────────────────
+echo [3/3] Running test suites...
 echo.
 echo  ------------------------------------------------------------
 echo    Test Suites
 echo  ------------------------------------------------------------
 
+IF NOT EXIST "%BIN_DIR%" (
+    echo  [WARN] Binary directory not found: %BIN_DIR%
+    echo         Ensure the build succeeded for config '%BUILD_CONFIG%'.
+    POPD & EXIT /B 1
+)
+
 SET TOTAL_PASSED=0
 SET TOTAL_FAILED=0
-SET SUITE_COUNT=0
 
-FOR %%T IN (test_assert test_models test_string_rules) DO CALL :RUN_SUITE "%%T"
+:: Discover all test_*.exe automatically — no hardcoded list.
+FOR %%F IN ("%BIN_DIR%\test_*.exe") DO CALL :RUN_SUITE "%%~nF"
 
-:: ── Final summary ────────────────────────────────────────────
+:: ── Final summary ─────────────────────────────────────────────
 echo.
 echo  ============================================================
 echo    FINAL SUMMARY
@@ -113,8 +159,6 @@ IF NOT EXIST "%EXE%" (
 TYPE "%OUT%"
 
 :: Extract passed count from summary line: "[  PASSED  ] N tests."
-:: Token layout after splitting on spaces: [  PASSED  ] 5 tests.
-::   1:[    2:PASSED    3:]    4:5    5:tests.
 FOR /F "tokens=4" %%N IN ('FINDSTR /C:"  PASSED  ] " "%OUT%" 2^>NUL') DO SET /A TOTAL_PASSED+=%%N
 
 :: Extract failed count from line: "[  FAILED  ] N tests, listed below:"
