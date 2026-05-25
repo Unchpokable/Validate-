@@ -33,6 +33,70 @@ TEST(RequireDeathTest, OutputContainsFilename)
     EXPECT_DEATH(vd::require(false, "loc check"), "test_assert");
 }
 
+// --- vd::require<ExceptionType> ---
+
+TEST(RequireExceptionTest, TrueConditionDoesNotThrow)
+{
+    EXPECT_NO_THROW(vd::require<std::runtime_error>(true, "should not fire"));
+}
+
+TEST(RequireExceptionTest, TrueConditionWithArgsDoesNotThrow)
+{
+    EXPECT_NO_THROW(vd::require<std::runtime_error>(true, "value={}", 42));
+}
+
+TEST(RequireExceptionTest, FalseConditionThrows)
+{
+    EXPECT_THROW(vd::require<std::runtime_error>(false, "boom"), std::runtime_error);
+}
+
+TEST(RequireExceptionTest, ThrowsCorrectExceptionType)
+{
+    EXPECT_THROW(vd::require<std::logic_error>(false, "logic"), std::logic_error);
+    EXPECT_NO_THROW([]{ try { vd::require<std::logic_error>(false, "x"); } catch (const std::runtime_error&) { throw; } catch (...) {} }());
+}
+
+TEST(RequireExceptionTest, ExceptionMessageMatchesFormat)
+{
+    try {
+        vd::require<std::runtime_error>(false, "val={} str={}", 7, "hi");
+        FAIL() << "expected std::runtime_error";
+    } catch (const std::runtime_error& e) {
+        EXPECT_STREQ(e.what(), "val=7 str=hi");
+    }
+}
+
+TEST(RequireExceptionTest, ExceptionMessageNoArgs)
+{
+    try {
+        vd::require<std::runtime_error>(false, "plain message");
+        FAIL() << "expected std::runtime_error";
+    } catch (const std::runtime_error& e) {
+        EXPECT_STREQ(e.what(), "plain message");
+    }
+}
+
+TEST(RequireExceptionTest, WorksWithCustomException)
+{
+    struct MyError : std::exception {
+        std::string msg;
+        explicit MyError(std::string s) : msg(std::move(s)) {}
+        const char* what() const noexcept override { return msg.c_str(); }
+    };
+
+    try {
+        vd::require<MyError>(false, "custom={}", 99);
+        FAIL() << "expected MyError";
+    } catch (const MyError& e) {
+        EXPECT_STREQ(e.what(), "custom=99");
+    }
+}
+
+TEST(RequireExceptionTest, CaughtAsBaseStdException)
+{
+    EXPECT_THROW(vd::require<std::runtime_error>(false, "base"), std::exception);
+}
+
 // --- vd::require_callback ---
 
 static bool s_called = false;

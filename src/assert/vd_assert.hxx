@@ -48,6 +48,15 @@ inline void require(bool condition, details::assert_format<std::type_identity_t<
     }
 }
 
+template<typename ExceptionType, typename... Args>
+requires std::derived_from<ExceptionType, std::exception>
+inline void require(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+{
+    if(!condition) {
+        throw ExceptionType(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
+    }
+}
+
 template<auto OnFailed, typename... Args>
 requires std::invocable<decltype(OnFailed), std::string>
 inline void require_callback(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)

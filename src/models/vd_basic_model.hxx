@@ -17,6 +17,8 @@
 
 #include "utils/vd_overload.hxx"
 
+#include "vd_core.hxx"
+
 namespace vd
 {
 template<typename T>
@@ -37,6 +39,16 @@ struct basic_model {
     bool is_valid(const_reference_type object) const
     {
         return is_valid(std::addressof(object));
+    }
+
+    void dead_check(const_pointer_type object) const
+    {
+        vd::require<vd::validation_exception>(is_valid(object), "Object failed validation rules");
+    }
+
+    void dead_check(const_reference_type object) const
+    {
+        dead_check(std::addressof(object));
     }
 
     basic_bound_model<T> bind(const_pointer_type object) const
@@ -106,6 +118,11 @@ struct basic_bound_model {
     bool is_valid() const
     {
         return m_model.is_valid(m_object);
+    }
+
+    void dead_check() const
+    {
+        m_model.dead_check(m_object);
     }
 
     // bind stores a non-owning reference — the model must outlive the bound instance.

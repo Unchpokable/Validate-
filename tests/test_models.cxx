@@ -467,6 +467,93 @@ TEST(BoundModelTest, BindByPointerAbortOnNull)
 }
 
 // ---------------------------------------------------------------------------
+// vd::basic_model::dead_check — throws validation_exception on invalid object
+// ---------------------------------------------------------------------------
+
+TEST(DeadCheckModelTest, ValidObjectDoesNotThrow)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_NO_THROW(model.dead_check(Point { 5.0, 0.0 }));
+}
+
+TEST(DeadCheckModelTest, InvalidObjectThrowsValidationException)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_THROW(model.dead_check(Point { -1.0, 0.0 }), vd::validation_exception);
+}
+
+TEST(DeadCheckModelTest, ThrownExceptionIsCaughtAsStdException)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_THROW(model.dead_check(Point { -1.0, 0.0 }), std::exception);
+}
+
+TEST(DeadCheckModelTest, ValidPointerDoesNotThrow)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    Point p { 5.0, 0.0 };
+    EXPECT_NO_THROW(model.dead_check(&p));
+}
+
+TEST(DeadCheckModelTest, InvalidPointerThrowsValidationException)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    Point p { -1.0, 0.0 };
+    EXPECT_THROW(model.dead_check(&p), vd::validation_exception);
+}
+
+TEST(DeadCheckModelTest, NullPointerThrowsValidationException)
+{
+    // nullptr is treated as an invalid object by is_valid(), so dead_check must throw.
+    auto model = vd::basic_model<Point>();
+    EXPECT_THROW(model.dead_check(static_cast<const Point*>(nullptr)), vd::validation_exception);
+}
+
+TEST(DeadCheckModelTest, MultipleRulesThrowOnFirstViolation)
+{
+    auto model = vd::basic_model<Point>()
+                     .with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)))
+                     .with(vd::member(&Point::y, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_NO_THROW(model.dead_check(Point { 5.0, 5.0 }));
+    EXPECT_THROW(model.dead_check(Point { -1.0, 5.0 }), vd::validation_exception);
+    EXPECT_THROW(model.dead_check(Point { 5.0, -1.0 }), vd::validation_exception);
+}
+
+// ---------------------------------------------------------------------------
+// vd::basic_bound_model::dead_check — delegates to the underlying model
+// ---------------------------------------------------------------------------
+
+TEST(DeadCheckBoundModelTest, ValidObjectDoesNotThrow)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    Point p { 5.0, 0.0 };
+    EXPECT_NO_THROW(model.bind(p).dead_check());
+}
+
+TEST(DeadCheckBoundModelTest, InvalidObjectThrowsValidationException)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    Point p { -1.0, 0.0 };
+    EXPECT_THROW(model.bind(p).dead_check(), vd::validation_exception);
+}
+
+TEST(DeadCheckBoundModelTest, ThrownExceptionIsCaughtAsStdException)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    Point p { -1.0, 0.0 };
+    EXPECT_THROW(model.bind(p).dead_check(), std::exception);
+}
+
+// ---------------------------------------------------------------------------
 // Mixed: field + member + predicate in a single model
 // ---------------------------------------------------------------------------
 
