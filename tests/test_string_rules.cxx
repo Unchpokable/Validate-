@@ -181,8 +181,7 @@ TEST(StringRulesRegexTest, MatchesEmptyPattern)
 TEST(StringRulesRegexDeathTest, InvalidPatternAborts)
 {
     // An invalid regex pattern must trigger vd::require and abort.
-    auto checker = vd::string_rules::regex("[invalid");
-    EXPECT_DEATH(checker("anything"), "");
+    EXPECT_DEATH(vd::string_rules::regex("[invalid"), "");
 }
 
 // ---------------------------------------------------------------------------

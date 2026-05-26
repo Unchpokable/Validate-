@@ -3,9 +3,6 @@
 #ifndef VD_OVERLOAD_HXX
 #define VD_OVERLOAD_HXX
 
-#include <type_traits>
-#include <utility>
-
 namespace vd
 {
 template<typename... Ts>

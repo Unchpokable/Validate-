@@ -3,6 +3,10 @@
 #ifndef VD_CORE_HXX
 #define VD_CORE_HXX
 
+#include <exception>
+#include <string>
+
+
 namespace vd
 {
 template<typename Tag>

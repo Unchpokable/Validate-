@@ -40,38 +40,34 @@ if(_vd_need_qt)
     # Propagate required components to the parent scope for package config generation
     set(VALIDATE_QT_COMPONENTS_REQUIRED "${_vd_qt_components}" PARENT_SCOPE)
 
-    # ── Qt Base extension target ───────────────────────────────────────────────
+    set(_vd_src_root "${CMAKE_CURRENT_SOURCE_DIR}/..")
+
+    # ── Qt Base extension ──────────────────────────────────────────────────────
+    # Compiled sources and link requirements are folded directly into vd.
     if(VD_EXTENSION_QT_BASE)
-        add_library(vd_qt_base INTERFACE)
-        add_library(Validate::vd_qt_base ALIAS vd_qt_base)
-        target_link_libraries(vd_qt_base INTERFACE Validate::vd Qt6::Core)
-        target_compile_definitions(vd_qt_base INTERFACE VD_ENABLE_EXTENSION_QT_BASE)
+        target_sources(vd PRIVATE
+            "${_vd_src_root}/src/ext/qt/qtbase/vd_qstring.cxx"
+        )
+        target_link_libraries(vd PUBLIC Qt6::Core)
+        target_compile_definitions(vd PUBLIC VD_ENABLE_EXTENSION_QT_BASE)
     endif()
 
-    # ── Qt Widgets extension target ────────────────────────────────────────────
+    # ── Qt Widgets extension ───────────────────────────────────────────────────
     if(VD_EXTENSION_QT_WIDGETS)
-        add_library(vd_qt_widgets INTERFACE)
-        add_library(Validate::vd_qt_widgets ALIAS vd_qt_widgets)
-        # vd_qt_widgets pulls in qt_base automatically
-        if(TARGET vd_qt_base)
-            target_link_libraries(vd_qt_widgets INTERFACE Validate::vd_qt_base Qt6::Widgets)
-        else()
-            target_link_libraries(vd_qt_widgets INTERFACE Validate::vd Qt6::Core Qt6::Widgets)
-            target_compile_definitions(vd_qt_widgets INTERFACE VD_ENABLE_EXTENSION_QT_BASE)
+        target_link_libraries(vd PUBLIC Qt6::Widgets)
+        target_compile_definitions(vd PUBLIC VD_ENABLE_EXTENSION_QT_WIDGETS)
+        # Qt Base is implicitly required by Widgets; make sure its define is set too.
+        if(NOT VD_EXTENSION_QT_BASE)
+            target_compile_definitions(vd PUBLIC VD_ENABLE_EXTENSION_QT_BASE)
         endif()
-        target_compile_definitions(vd_qt_widgets INTERFACE VD_ENABLE_EXTENSION_QT_WIDGETS)
     endif()
 
-    # ── Qt QML extension target ────────────────────────────────────────────────
+    # ── Qt QML extension ──────────────────────────────────────────────────────
     if(VD_EXTENSION_QT_QML)
-        add_library(vd_qt_qml INTERFACE)
-        add_library(Validate::vd_qt_qml ALIAS vd_qt_qml)
-        if(TARGET vd_qt_base)
-            target_link_libraries(vd_qt_qml INTERFACE Validate::vd_qt_base Qt6::Qml Qt6::Quick)
-        else()
-            target_link_libraries(vd_qt_qml INTERFACE Validate::vd Qt6::Core Qt6::Qml Qt6::Quick)
-            target_compile_definitions(vd_qt_qml INTERFACE VD_ENABLE_EXTENSION_QT_BASE)
+        target_link_libraries(vd PUBLIC Qt6::Qml Qt6::Quick)
+        target_compile_definitions(vd PUBLIC VD_ENABLE_EXTENSION_QT_QML)
+        if(NOT VD_EXTENSION_QT_BASE)
+            target_compile_definitions(vd PUBLIC VD_ENABLE_EXTENSION_QT_BASE)
         endif()
-        target_compile_definitions(vd_qt_qml INTERFACE VD_ENABLE_EXTENSION_QT_QML)
     endif()
 endif()

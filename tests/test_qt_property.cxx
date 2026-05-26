@@ -5,6 +5,7 @@
 #include <QCoreApplication>
 #include <QObject>
 #include <QString>
+#include <QVariant>
 
 #include "ext/qt/vd_qtbase.hxx"
 #include "models/vd_basic_model.hxx"

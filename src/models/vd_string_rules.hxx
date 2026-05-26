@@ -5,11 +5,8 @@
 
 #include <concepts>
 #include <regex>
-#include <string>
 #include <string_view>
 #include <type_traits>
-
-#include "assert/vd_assert.hxx"
 
 #include "inline_deps/ctre.hpp"
 
@@ -40,7 +37,7 @@ struct string_match {
 struct regex_checker {
     enum class mode { include, exclude };
 
-    std::string pattern;
+    std::regex pattern;
     mode match_mode = mode::include;
 
     bool operator()(std::string_view s) const;
@@ -70,18 +67,6 @@ constexpr bool empty_or_whitespace_string(std::string_view s)
     return s.find_first_not_of(" \t\n\r\f\v") == std::string_view::npos;
 }
 
-inline bool std_regex(std::string_view s, std::string_view pattern)
-{
-    try {
-        std::regex re(pattern.begin(), pattern.end());
-        return std::regex_match(std::string(s), re);
-    }
-    catch(const std::regex_error&) {
-        vd::require(false, "Invalid regex pattern: {}", pattern);
-        return false;
-    }
-}
-
 constexpr bool uri_like(std::string_view s)
 {
     constexpr auto pattern = ctll::fixed_string { R"(^\w+://\S+$)" };
@@ -91,12 +76,6 @@ constexpr bool uri_like(std::string_view s)
 
 namespace vd::string_rules
 {
-inline bool regex_checker::operator()(std::string_view s) const
-{
-    bool matched = detail::std_regex(s, pattern);
-    return match_mode == mode::include ? matched : !matched;
-}
-
 constexpr string_match<detail::empty_string> empty()
 {
     return { string_match<detail::empty_string>::mode::include };
@@ -117,10 +96,7 @@ constexpr string_match<detail::email_like> email_like()
     return { string_match<detail::email_like>::mode::include };
 }
 
-inline regex_checker regex(std::string pattern)
-{
-    return { std::move(pattern), regex_checker::mode::include };
-}
+regex_checker regex(std::string_view pattern);
 
 constexpr string_match<detail::uri_like> uri_like()
 {

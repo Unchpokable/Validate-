@@ -3,10 +3,7 @@
 #ifndef VD_IMPL_ASSERT_HXX
 #define VD_IMPL_ASSERT_HXX
 
-#include <cstdio>
-#include <cstdlib>
 #include <format>
-#include <functional>
 #include <source_location>
 #include <string_view>
 #include <type_traits>
@@ -26,16 +23,7 @@ struct assert_format {
     }
 };
 
-[[noreturn]] inline void assert_fail(std::string_view message, const std::source_location& loc)
-{
-    std::fprintf(stderr,
-        "Assertion failed: %s\nFile: %s\nLine: %d\nFunction: %s\n",
-        message.data(),
-        loc.file_name(),
-        static_cast<int>(loc.line()),
-        loc.function_name());
-    std::abort();
-}
+[[noreturn]] void assert_fail(std::string_view message, const std::source_location& loc);
 } // namespace vd::details
 
 namespace vd

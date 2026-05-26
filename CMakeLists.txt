@@ -1,10 +1,12 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.23)
 
 project(Validate
     VERSION 0.1.0
-    DESCRIPTION "C++20 header-only validation and assertion library"
+    DESCRIPTION "C++20 validation and assertion library"
     LANGUAGES CXX
 )
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ── Compiler version guards ────────────────────────────────────────────────────
 # Required for C++20 <format> and <source_location>
@@ -31,18 +33,21 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     endif()
 endif()
 
-# ── Library target (header-only INTERFACE) ─────────────────────────────────────
-add_library(vd INTERFACE)
+# ── Static library (all compiled code lives here) ─────────────────────────────
+add_library(vd STATIC
+    src/assert/vd_assert.cxx
+    src/models/vd_string_rules.cxx
+)
 add_library(Validate::vd ALIAS vd)
 
-target_include_directories(vd INTERFACE
+target_include_directories(vd PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:include>
 )
 
-target_compile_features(vd INTERFACE cxx_std_20)
+target_compile_features(vd PUBLIC cxx_std_20)
 
-# ── Dependencies ───────────────────────────────────────────────────────────────
+# ── Dependencies (may add Qt sources / link libs to vd) ───────────────────────
 add_subdirectory(deps)
 
 # ── Tests (only when this is the top-level project) ───────────────────────────
@@ -51,17 +56,19 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     add_subdirectory(tests)
 endif()
 
-# ── Install & packaging ────────────────────────────────────────────────────────
+# ── Install & packaging (skipped when consumed via FetchContent) ───────────────
+if(NOT CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    return()
+endif()
+
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-install(TARGETS vd EXPORT ValidateTargets)
-
-foreach(_ext qt_base qt_widgets qt_qml)
-    if(TARGET vd_${_ext})
-        install(TARGETS vd_${_ext} EXPORT ValidateTargets)
-    endif()
-endforeach()
+install(
+    TARGETS     vd
+    EXPORT      ValidateTargets
+    ARCHIVE     DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+)
 
 install(
     DIRECTORY   "${CMAKE_CURRENT_SOURCE_DIR}/src/"

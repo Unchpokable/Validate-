@@ -4,22 +4,18 @@
 #define VD_QSTRING_HXX
 
 #include <concepts>
-#include <string_view>
 #include <type_traits>
 
 #include <QRegularExpression>
 #include <QString>
 #include <QStringView>
 
-#include "assert/vd_assert.hxx"
-#include "inline_deps/ctre.hpp"
-
 namespace vd::qt::string_rules
 {
 // Concept: a callable that accepts QStringView and returns bool-convertible.
 template<auto Matcher>
-concept qstring_matcher = (std::invocable<decltype(Matcher), QStringView>
-                           && std::convertible_to<std::invoke_result_t<decltype(Matcher), QStringView>, bool>);
+concept qstring_matcher =
+    (std::invocable<decltype(Matcher), QStringView> && std::convertible_to<std::invoke_result_t<decltype(Matcher), QStringView>, bool>);
 
 // Mirrors vd::string_rules::string_match but operates on QStringView.
 // Since const QString& implicitly converts to QStringView, this is also
@@ -31,7 +27,9 @@ struct qstring_match {
     mode match_mode = mode::include;
 
     constexpr qstring_match() = default;
-    constexpr qstring_match(mode m) : match_mode(m) {}
+    constexpr qstring_match(mode m) : match_mode(m)
+    {
+    }
 
     bool operator()(QStringView s) const
     {
@@ -53,93 +51,26 @@ struct qregex_checker {
 
 namespace vd::qt::string_rules::detail
 {
-inline bool empty_string(QStringView s)
-{
-    return s.isEmpty();
-}
-
-inline bool non_empty_string(QStringView s)
-{
-    return !s.isEmpty();
-}
-
+bool empty_string(QStringView s);
+bool non_empty_string(QStringView s);
 // Uses QChar::isSpace() which covers all Unicode whitespace, matching Qt idioms.
-inline bool empty_or_whitespace_string(QStringView s)
-{
-    if (s.isEmpty())
-        return true;
-    for (QChar c : s)
-        if (!c.isSpace())
-            return false;
-    return true;
-}
-
+bool empty_or_whitespace_string(QStringView s);
 // Reuses the same CTRE patterns as the std counterpart via UTF-8 conversion.
-inline bool email_like(QStringView s)
-{
-    auto utf8 = s.toUtf8();
-    constexpr auto pattern = ctll::fixed_string { R"(^\S+@\S+\.\S+$)" };
-    return ctre::match<pattern>(std::string_view(utf8.data(), utf8.size()));
-}
-
-inline bool uri_like(QStringView s)
-{
-    auto utf8 = s.toUtf8();
-    constexpr auto pattern = ctll::fixed_string { R"(^\w+://\S+$)" };
-    return ctre::match<pattern>(std::string_view(utf8.data(), utf8.size()));
-}
-
+bool email_like(QStringView s);
+bool uri_like(QStringView s);
 // Full-string match: capturedStart==0 and capturedLength==subject length,
 // mirroring std::regex_match rather than std::regex_search.
-inline bool qregex(QStringView s, const QString& pattern)
-{
-    QRegularExpression re(pattern);
-    if (!re.isValid()) {
-        vd::require(false, "Invalid regex pattern: {}", pattern.toStdString());
-        return false;
-    }
-    QRegularExpressionMatch m = re.match(s);
-    return m.hasMatch() && m.capturedStart() == 0 && m.capturedLength() == s.size();
-}
+bool qregex(QStringView s, const QString& pattern);
 } // namespace vd::qt::string_rules::detail
 
 namespace vd::qt::string_rules
 {
-inline bool qregex_checker::operator()(QStringView s) const
-{
-    bool matched = detail::qregex(s, pattern);
-    return match_mode == mode::include ? matched : !matched;
-}
-
-inline qstring_match<detail::empty_string> empty()
-{
-    return { qstring_match<detail::empty_string>::mode::include };
-}
-
-inline qstring_match<detail::non_empty_string> non_empty()
-{
-    return { qstring_match<detail::non_empty_string>::mode::include };
-}
-
-inline qstring_match<detail::empty_or_whitespace_string> empty_or_whitespace()
-{
-    return { qstring_match<detail::empty_or_whitespace_string>::mode::include };
-}
-
-inline qstring_match<detail::email_like> email_like()
-{
-    return { qstring_match<detail::email_like>::mode::include };
-}
-
-inline qstring_match<detail::uri_like> uri_like()
-{
-    return { qstring_match<detail::uri_like>::mode::include };
-}
-
-inline qregex_checker regex(QString pattern)
-{
-    return { std::move(pattern), qregex_checker::mode::include };
-}
+qstring_match<detail::empty_string> empty();
+qstring_match<detail::non_empty_string> non_empty();
+qstring_match<detail::empty_or_whitespace_string> empty_or_whitespace();
+qstring_match<detail::email_like> email_like();
+qstring_match<detail::uri_like> uri_like();
+qregex_checker regex(QString pattern);
 } // namespace vd::qt::string_rules
 
 #endif // VD_QSTRING_HXX

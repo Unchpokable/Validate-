@@ -59,7 +59,16 @@ $cacheFile = Join-Path $buildDir "CMakeCache.txt"
 if ($Reconfigure -or -not (Test-Path $cacheFile)) {
     Write-Step "1/3" "Running CMake configure..."
 
-    $cmakeArgs = @("-B", $buildDir)
+    # Wipe the build tree to avoid generator-mismatch errors (FetchContent
+    # subbuilds also cache the generator and must be regenerated from scratch).
+    if (Test-Path $buildDir) {
+        Write-Host "        Cleaning build directory..." -ForegroundColor DarkGray
+        Remove-Item $buildDir -Recurse -Force
+    }
+
+    # Ninja Multi-Config: supports --config Debug/Release like the VS generator
+    # AND honours CMAKE_EXPORT_COMPILE_COMMANDS (VS generator ignores it).
+    $cmakeArgs = @("-B", $buildDir, "-G", "Ninja Multi-Config")
     if ($effectiveQtDir) {
         $cmakeArgs += "-DVD_EXTENSION_QT_BASE=ON"
         # Pass VD_QT_DIR only when -QtDir was given explicitly;

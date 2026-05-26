@@ -7,8 +7,8 @@
 #include <QString>
 #include <QStringView>
 
+#include "ext/qt/qtbase/vd_qproperty.hxx"
 #include "ext/qt/qtbase/vd_qstring.hxx"
-#include "ext/qt/qtbase/vd_property.hxx"
 #include "models/vd_basic_model.hxx"
 #include "models/vd_rule_factory.hxx"
 
@@ -31,15 +31,23 @@ class StringQObject : public QObject {
     Q_PROPERTY(QString website READ website)
 
 public:
-    explicit StringQObject(const QString& name, const QString& email, const QString& website,
-                           QObject* parent = nullptr)
+    explicit StringQObject(const QString& name, const QString& email, const QString& website, QObject* parent = nullptr)
         : QObject(parent), m_name(name), m_email(email), m_website(website)
     {
     }
 
-    QString name() const { return m_name; }
-    QString email() const { return m_email; }
-    QString website() const { return m_website; }
+    QString name() const
+    {
+        return m_name;
+    }
+    QString email() const
+    {
+        return m_email;
+    }
+    QString website() const
+    {
+        return m_website;
+    }
 
 private:
     QString m_name, m_email, m_website;
@@ -58,7 +66,10 @@ public:
         static int argc = 1;
         m_app = std::make_unique<QCoreApplication>(argc, argv);
     }
-    void TearDown() override { m_app.reset(); }
+    void TearDown() override
+    {
+        m_app.reset();
+    }
 
 private:
     std::unique_ptr<QCoreApplication> m_app;
@@ -268,8 +279,7 @@ TEST(QStringRulesRegexDeathTest, InvalidPatternAborts)
 
 TEST(QStringRulesMemberTest, MemberNonEmptyValidatesName)
 {
-    auto model = vd::basic_model<QStringProfile>()
-                     .with(vd::member(&QStringProfile::name, vd::qt::string_rules::non_empty()));
+    auto model = vd::basic_model<QStringProfile>().with(vd::member(&QStringProfile::name, vd::qt::string_rules::non_empty()));
 
     EXPECT_TRUE(model.is_valid(QStringProfile { "Alice", "", "" }));
     EXPECT_FALSE(model.is_valid(QStringProfile { "", "", "" }));
@@ -277,8 +287,7 @@ TEST(QStringRulesMemberTest, MemberNonEmptyValidatesName)
 
 TEST(QStringRulesMemberTest, MemberEmailLikeValidatesEmail)
 {
-    auto model = vd::basic_model<QStringProfile>()
-                     .with(vd::member(&QStringProfile::email, vd::qt::string_rules::email_like()));
+    auto model = vd::basic_model<QStringProfile>().with(vd::member(&QStringProfile::email, vd::qt::string_rules::email_like()));
 
     EXPECT_TRUE(model.is_valid(QStringProfile { "x", "user@example.com", "" }));
     EXPECT_FALSE(model.is_valid(QStringProfile { "x", "notanemail", "" }));
@@ -286,8 +295,7 @@ TEST(QStringRulesMemberTest, MemberEmailLikeValidatesEmail)
 
 TEST(QStringRulesMemberTest, MemberUriLikeValidatesWebsite)
 {
-    auto model = vd::basic_model<QStringProfile>()
-                     .with(vd::member(&QStringProfile::website, vd::qt::string_rules::uri_like()));
+    auto model = vd::basic_model<QStringProfile>().with(vd::member(&QStringProfile::website, vd::qt::string_rules::uri_like()));
 
     EXPECT_TRUE(model.is_valid(QStringProfile { "", "", "https://example.com" }));
     EXPECT_FALSE(model.is_valid(QStringProfile { "", "", "not-a-uri" }));
@@ -295,8 +303,7 @@ TEST(QStringRulesMemberTest, MemberUriLikeValidatesWebsite)
 
 TEST(QStringRulesMemberTest, RegexCheckerWorksWithMember)
 {
-    auto model = vd::basic_model<QStringProfile>()
-                     .with(vd::member(&QStringProfile::name, vd::qt::string_rules::regex(R"(\w+)")));
+    auto model = vd::basic_model<QStringProfile>().with(vd::member(&QStringProfile::name, vd::qt::string_rules::regex(R"(\w+)")));
 
     EXPECT_TRUE(model.is_valid(QStringProfile { "Alice123", "", "" }));
     EXPECT_FALSE(model.is_valid(QStringProfile { "Alice 123", "", "" })); // space not allowed
@@ -380,9 +387,10 @@ TEST(QStringRulesQtPropertyTest, ModelCombiningMultipleStringPropertyRules)
     auto email_checker = vd::qt::string_rules::email_like();
 
     auto model = vd::basic_model<StringQObject>()
-                     .with(vd::qt::qt_property<StringQObject>("name", [name_checker](const QString& s) {
-                         return name_checker(s);
-                     }))
+                     .with(vd::qt::qt_property<StringQObject>("name",
+                         [name_checker](const QString& s) {
+                             return name_checker(s);
+                         }))
                      .with(vd::qt::qt_property<StringQObject>("email", [email_checker](const QString& s) {
                          return email_checker(s);
                      }));

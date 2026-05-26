@@ -21,13 +21,13 @@ template<typename T, typename Checker>
 auto qt_property(const QString& prop_name, Checker checker) -> rule<T>
 {
     using PropT = typename detail::first_arg_of<Checker>::type;
-    return rule<T>([prop_name, checker](const T& obj) -> bool {
-        auto qobj = dynamic_cast<const QObject*>(&obj);
+    return rule<T>([prop_name = prop_name.toUtf8(), checker](const T& obj) -> bool {
+        auto qobj = qobject_cast<const QObject*>(&obj);
         if(!qobj) {
             return false;
         }
 
-        QVariant value = qobj->property(prop_name.toUtf8().constData());
+        QVariant value = qobj->property(prop_name.data());
         if(!value.isValid()) {
             return false;
         }
