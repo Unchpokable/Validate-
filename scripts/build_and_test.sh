@@ -141,7 +141,7 @@ fi
 
 # ── Step 3: Run tests ─────────────────────────────────────────
 # Discover all test_* binaries automatically — no hardcoded list.
-mapfile -t SUITE_BINS < <(find "$BIN_DIR" -maxdepth 1 -name 'test_*' -type f | sort)
+mapfile -t SUITE_BINS < <(find "$BIN_DIR" -maxdepth 1 \( -name 'test_*.exe' -o \( -name 'test_*' -not -name '*.*' \) \) -type f | sort)
 
 if [ ${#SUITE_BINS[@]} -eq 0 ]; then
     echo -e "${YELLOW}[WARN] No test binaries found in: $BIN_DIR${NC}"

@@ -20,6 +20,9 @@ target_link_libraries(test_models PRIVATE Validate::vd GTest::gtest_main)
 add_executable(test_string_rules test_string_rules.cxx)
 target_link_libraries(test_string_rules PRIVATE Validate::vd GTest::gtest_main)
 
+add_executable(test_integration test_integration.cxx)
+target_link_libraries(test_integration PRIVATE Validate::vd GTest::gtest_main)
+
 include(GoogleTest)
 # PRE_TEST: defer test discovery to ctest run time.
 # When Qt extensions are enabled, vd.lib carries a Qt6Core dependency so the
@@ -27,6 +30,7 @@ include(GoogleTest)
 gtest_discover_tests(test_assert       DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(test_models       DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(test_string_rules DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(test_integration  DISCOVERY_MODE PRE_TEST)
 
 if(VD_EXTENSION_QT_BASE)
     add_executable(test_qt_property test_qt_property.cxx)
@@ -40,4 +44,9 @@ if(VD_EXTENSION_QT_BASE)
     set_target_properties(test_qt_qstring_rules PROPERTIES AUTOMOC ON)
     target_link_libraries(test_qt_qstring_rules PRIVATE Validate::vd GTest::gtest_main)
     gtest_discover_tests(test_qt_qstring_rules DISCOVERY_MODE PRE_TEST)
+
+    add_executable(test_qt_integration test_qt_integration.cxx)
+    set_target_properties(test_qt_integration PROPERTIES AUTOMOC ON)
+    target_link_libraries(test_qt_integration PRIVATE Validate::vd GTest::gtest_main)
+    gtest_discover_tests(test_qt_integration DISCOVERY_MODE PRE_TEST)
 endif()
