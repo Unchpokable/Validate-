@@ -61,7 +61,9 @@ step "1/3" "Checking CMake configuration..."
 if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
     step "1/3" "Running cmake configure..."
 
-    CMAKE_ARGS=("-B" "$BUILD_DIR" "-DCMAKE_BUILD_TYPE=$BUILD_CONFIG")
+    # Ninja Multi-Config: supports --config Debug/Release at build time
+    # AND honours CMAKE_EXPORT_COMPILE_COMMANDS (Makefile/VS generators ignore it).
+    CMAKE_ARGS=("-B" "$BUILD_DIR" "-G" "Ninja Multi-Config")
     if [ -n "$EFFECTIVE_QT_DIR" ]; then
         CMAKE_ARGS+=("-DVD_EXTENSION_QT_BASE=ON")
         # Pass VD_QT_DIR only when an explicit argument was given;
@@ -91,7 +93,7 @@ NPROC=4
 command -v nproc  >/dev/null 2>&1 && NPROC=$(nproc)
 command -v sysctl >/dev/null 2>&1 && NPROC=$(sysctl -n hw.ncpu 2>/dev/null || echo "$NPROC")
 
-cmake --build "$BUILD_DIR" -j"$NPROC"
+cmake --build "$BUILD_DIR" --config "$BUILD_CONFIG" -j"$NPROC"
 if [ $? -ne 0 ]; then
     echo -e "${RED}[ERROR] Build failed.${NC}"
     exit 1

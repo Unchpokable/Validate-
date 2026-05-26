@@ -44,14 +44,16 @@ echo.
 :: ── Step 1: CMake configure ──────────────────────────────────
 IF NOT EXIST "%BUILD_DIR%\CMakeCache.txt" (
     echo [1/3] Running CMake configure...
+    :: Ninja Multi-Config: supports --config Debug/Release at build time
+    :: AND honours CMAKE_EXPORT_COMPILE_COMMANDS (VS generator ignores it).
     IF NOT "%EFFECTIVE_QT_DIR%"=="" (
         IF NOT "%~2"=="" (
-            cmake -B "%BUILD_DIR%" -DVD_EXTENSION_QT_BASE=ON -DVD_QT_DIR="%EFFECTIVE_QT_DIR%"
+            cmake -B "%BUILD_DIR%" -G "Ninja Multi-Config" -DVD_EXTENSION_QT_BASE=ON -DVD_QT_DIR="%EFFECTIVE_QT_DIR%"
         ) ELSE (
-            cmake -B "%BUILD_DIR%" -DVD_EXTENSION_QT_BASE=ON
+            cmake -B "%BUILD_DIR%" -G "Ninja Multi-Config" -DVD_EXTENSION_QT_BASE=ON
         )
     ) ELSE (
-        cmake -B "%BUILD_DIR%"
+        cmake -B "%BUILD_DIR%" -G "Ninja Multi-Config"
     )
     IF ERRORLEVEL 1 (
         echo.

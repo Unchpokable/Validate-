@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.23)
 
+if(MSVC)
+    set(CMAKE_CL_SHOWINCLUDES_PREFIX "Примечание: включение файла: ") 
+endif()
+
 project(Validate
     VERSION 0.1.0
     DESCRIPTION "C++20 validation and assertion library"
