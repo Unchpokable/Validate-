@@ -130,13 +130,13 @@ Any callable satisfying `V → bool` is a valid checker (`value_checker` concept
 
 ```cpp
 vd::int_bounds::inclusive(0, 100)         // [0, 100]
-vd::int_bounds::exclusive(0, 100)         // (0, 100) — compile error for int, use float/double
+vd::int_bounds::exclusive(0, 100)         // (0, 100)
 vd::double_bounds::greater_than(0.0)      // (0, +∞)
 vd::float_bounds::less_than(1.0f)         // (-∞, 1)
 vd::long_bounds::unbounded()              // always true
 ```
 
-`exclusive`, `greater_than`, and `less_than` use `std::nextafter` internally and are only available for floating-point types. Use `inclusive` with a manual offset for integers.
+Any numeric_bounds() bound uses library's own custom `vd::ct_nextafter()` (`constexpr` implementation of `std::nextafter` compatible with integer types) function so it can work with any default numeric type.
 
 Available aliases: `byte_bounds`, `short_bounds`, `int_bounds`, `long_bounds`, `float_bounds`, `double_bounds`, and their unsigned variants.
 
