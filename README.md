@@ -136,7 +136,7 @@ vd::float_bounds::less_than(1.0f)         // (-∞, 1)
 vd::long_bounds::unbounded()              // always true
 ```
 
-Any numeric_bounds() bound uses library's own custom `vd::ct_nextafter()` (`constexpr` implementation of `std::nextafter` compatible with integer types) function so it can work with any default numeric type.
+Any `numeric_bounds` bound uses library's own custom `vd::ct_nextafter()` (`constexpr` implementation of `std::nextafter` compatible with integer types) function so it can work with any default numeric type.
 
 Available aliases: `byte_bounds`, `short_bounds`, `int_bounds`, `long_bounds`, `float_bounds`, `double_bounds`, and their unsigned variants.
 
