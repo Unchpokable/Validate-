@@ -4,18 +4,12 @@
 #define VD_BASIC_MODEL_HXX
 
 #include <algorithm>
-#include <concepts>
-#include <functional>
-#include <ranges>
 #include <type_traits>
-#include <variant>
 #include <vector>
 
 #include "models/vd_rule.hxx"
 
 #include "assert/vd_assert.hxx"
-
-#include "utils/vd_overload.hxx"
 
 #include "vd_core.hxx"
 

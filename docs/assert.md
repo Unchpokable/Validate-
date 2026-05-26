@@ -36,6 +36,30 @@ Line: 42
 Function: void foo()
 ```
 
+### `vd::require<exception>`
+```cpp
+template<typename Exception, typename... Args>
+void vd::require(bool condition, format_string fmt, Args&&... args);
+```
+
+Если `condition == false` - форматирует сообщение через `std::format`, бросает исключение `Exception`, передавая форматированное сообщение в качестве `what()` сообщения исключения.
+
+```cpp
+vd::require<std::logic_error>(ptr != nullptr, "Expected non-null pointer in {}", __func__);
+vd::require<vd::validation_exception>(value > 0, "Value must be positive, got {}", value);
+vd::require<std::runtime_error>(true, "This never fires");
+```
+
+**Вывод при ошибке:**
+Аналогично `vd::require`:
+```
+Assertion failed: Expected non-null pointer in foo
+File: src/foo.cpp
+Line: 42
+Function: void foo()
+```
+Но вместо stderr текст выводится в качестве текста исключения.
+
 ### `vd::require_callback`
 
 ```cpp

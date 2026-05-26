@@ -63,6 +63,15 @@ src/
 └── inline_deps/
     └── ctre.hpp               # Compile-Time Regular Expressions (CTRE)
 
+ext/qt/
+├── vd_qtbase.hxx              # Агрегирующий заголовок: qtbase-подмодули
+├── vd_qtwidgets.hxx           # Зарезервировано (пусто)
+├── vd_qml.hxx                 # Зарезервировано (пусто)
+└── qtbase/
+    ├── vd_qstring.hxx         # qstring_match<>, qregex_checker, фабрики
+    ├── vd_qstring.cxx         # Реализация Qt string checker-ов
+    └── vd_qproperty.hxx       # qt_property() для Q_PROPERTY
+
 tests/
 ├── test_assert.cxx            # Тесты vd::require
 ├── test_models.cxx            # Тесты rule, basic_model, numeric_bounds
@@ -73,7 +82,8 @@ docs/
 ├── assert.md                  # Assert module
 ├── models.md                  # rule, basic_model, basic_bound_model
 ├── numeric.md                 # numeric_bounds
-└── string-rules.md            # string_rules
+├── string-rules.md            # string_rules
+└── qt extensions.md           # Qt extensions (QString, QProperty)
 ```
 
 ## Ключевые концепции
