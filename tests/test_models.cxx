@@ -574,3 +574,320 @@ TEST(MixedRulesTest, AllFactoryTypesCompose)
     EXPECT_FALSE(model.is_valid(Point { 99.0, 99.0 })); // magnitude too large
     EXPECT_FALSE(model.is_valid(Point { std::numeric_limits<double>::quiet_NaN(), 0.0 }));
 }
+
+// ---------------------------------------------------------------------------
+// numeric_bounds — outside_inclusive
+// Accepts values in (-inf, lower_bound] ∪ [upper_bound, +inf).
+// Rejects values strictly inside (lower_bound, upper_bound).
+// ---------------------------------------------------------------------------
+
+TEST(NumericBoundsOutsideInclusiveTest, AcceptsLowerBoundItself)
+{
+    auto bounds = vd::int_bounds::outside_inclusive(0, 10);
+    EXPECT_TRUE(bounds(0));
+}
+
+TEST(NumericBoundsOutsideInclusiveTest, AcceptsUpperBoundItself)
+{
+    auto bounds = vd::int_bounds::outside_inclusive(0, 10);
+    EXPECT_TRUE(bounds(10));
+}
+
+TEST(NumericBoundsOutsideInclusiveTest, AcceptsBelowLowerBound)
+{
+    auto bounds = vd::int_bounds::outside_inclusive(0, 10);
+    EXPECT_TRUE(bounds(-1));
+    EXPECT_TRUE(bounds(std::numeric_limits<int32_t>::min()));
+}
+
+TEST(NumericBoundsOutsideInclusiveTest, AcceptsAboveUpperBound)
+{
+    auto bounds = vd::int_bounds::outside_inclusive(0, 10);
+    EXPECT_TRUE(bounds(11));
+    EXPECT_TRUE(bounds(std::numeric_limits<int32_t>::max()));
+}
+
+TEST(NumericBoundsOutsideInclusiveTest, RejectsStrictlyInsideRange)
+{
+    auto bounds = vd::int_bounds::outside_inclusive(0, 10);
+    EXPECT_FALSE(bounds(1));
+    EXPECT_FALSE(bounds(5));
+    EXPECT_FALSE(bounds(9));
+}
+
+TEST(NumericBoundsOutsideInclusiveTest, DoubleAcceptsExactBoundaries)
+{
+    auto bounds = vd::double_bounds::outside_inclusive(0.0, 1.0);
+    EXPECT_TRUE(bounds(0.0));
+    EXPECT_TRUE(bounds(1.0));
+    EXPECT_FALSE(bounds(0.5));
+}
+
+TEST(NumericBoundsOutsideInclusiveTest, DoubleAcceptsOutsideRegion)
+{
+    auto bounds = vd::double_bounds::outside_inclusive(0.0, 1.0);
+    EXPECT_TRUE(bounds(-0.1));
+    EXPECT_TRUE(bounds(1.1));
+}
+
+TEST(NumericBoundsOutsideInclusiveTest, ConstructibleAsConstexpr)
+{
+    // Verifies that outside_inclusive is usable in a constant expression context.
+    constexpr auto bounds = vd::int_bounds::outside_inclusive(0, 10);
+    EXPECT_TRUE(bounds(0));
+    EXPECT_TRUE(bounds(10));
+    EXPECT_TRUE(bounds(-1));
+    EXPECT_TRUE(bounds(11));
+    EXPECT_FALSE(bounds(5));
+}
+
+// ---------------------------------------------------------------------------
+// numeric_bounds — outside_exclusive
+// Accepts values in (-inf, lower_bound) ∪ (upper_bound, +inf).
+// Rejects values in [lower_bound, upper_bound].
+// ---------------------------------------------------------------------------
+
+TEST(NumericBoundsOutsideExclusiveTest, RejectsLowerBoundItself)
+{
+    auto bounds = vd::int_bounds::outside_exclusive(0, 10);
+    EXPECT_FALSE(bounds(0));
+}
+
+TEST(NumericBoundsOutsideExclusiveTest, RejectsUpperBoundItself)
+{
+    auto bounds = vd::int_bounds::outside_exclusive(0, 10);
+    EXPECT_FALSE(bounds(10));
+}
+
+TEST(NumericBoundsOutsideExclusiveTest, RejectsStrictlyInsideRange)
+{
+    auto bounds = vd::int_bounds::outside_exclusive(0, 10);
+    EXPECT_FALSE(bounds(1));
+    EXPECT_FALSE(bounds(5));
+    EXPECT_FALSE(bounds(9));
+}
+
+TEST(NumericBoundsOutsideExclusiveTest, AcceptsStrictlyBelowLowerBound)
+{
+    auto bounds = vd::int_bounds::outside_exclusive(0, 10);
+    EXPECT_TRUE(bounds(-1));
+    EXPECT_TRUE(bounds(std::numeric_limits<int32_t>::min()));
+}
+
+TEST(NumericBoundsOutsideExclusiveTest, AcceptsStrictlyAboveUpperBound)
+{
+    auto bounds = vd::int_bounds::outside_exclusive(0, 10);
+    EXPECT_TRUE(bounds(11));
+    EXPECT_TRUE(bounds(std::numeric_limits<int32_t>::max()));
+}
+
+TEST(NumericBoundsOutsideExclusiveTest, IntegerAdjacentToBoundariesAreAccepted)
+{
+    // For integers, nextafter steps by ±1, so -1 and 11 are the immediate neighbors.
+    auto bounds = vd::int_bounds::outside_exclusive(0, 10);
+    EXPECT_TRUE(bounds(-1));
+    EXPECT_TRUE(bounds(11));
+}
+
+TEST(NumericBoundsOutsideExclusiveTest, DoubleRejectsExactBoundaries)
+{
+    auto bounds = vd::double_bounds::outside_exclusive(0.0, 1.0);
+    EXPECT_FALSE(bounds(0.0));
+    EXPECT_FALSE(bounds(1.0));
+    EXPECT_FALSE(bounds(0.5));
+}
+
+TEST(NumericBoundsOutsideExclusiveTest, DoubleAcceptsImmediateNeighbors)
+{
+    auto bounds = vd::double_bounds::outside_exclusive(0.0, 1.0);
+    EXPECT_TRUE(bounds(std::nextafter(0.0, -1.0)));
+    EXPECT_TRUE(bounds(std::nextafter(1.0, 2.0)));
+}
+
+TEST(NumericBoundsOutsideExclusiveTest, ConstructibleAsConstexpr)
+{
+    // Verifies that outside_exclusive is usable in a constant expression context.
+    constexpr auto bounds = vd::int_bounds::outside_exclusive(0, 10);
+    EXPECT_FALSE(bounds(0));
+    EXPECT_FALSE(bounds(10));
+    EXPECT_FALSE(bounds(5));
+    EXPECT_TRUE(bounds(-1));
+    EXPECT_TRUE(bounds(11));
+}
+
+// ---------------------------------------------------------------------------
+// vd::validate_many — variadic overload (pack of T by value/ref)
+// ---------------------------------------------------------------------------
+
+TEST(ValidateManyVariadicTest, AllValidObjectsReturnsTrue)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_TRUE(vd::validate_many(model, Point { 1.0, 0.0 }, Point { 5.0, 0.0 }, Point { 10.0, 0.0 }));
+}
+
+TEST(ValidateManyVariadicTest, OneInvalidObjectReturnsFalse)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_FALSE(vd::validate_many(model, Point { 1.0, 0.0 }, Point { -1.0, 0.0 }, Point { 5.0, 0.0 }));
+}
+
+TEST(ValidateManyVariadicTest, AllInvalidObjectsReturnsFalse)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_FALSE(vd::validate_many(model, Point { -1.0, 0.0 }, Point { 11.0, 0.0 }));
+}
+
+TEST(ValidateManyVariadicTest, SingleValidObjectReturnsTrue)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_TRUE(vd::validate_many(model, Point { 5.0, 0.0 }));
+}
+
+TEST(ValidateManyVariadicTest, SingleInvalidObjectReturnsFalse)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_FALSE(vd::validate_many(model, Point { -5.0, 0.0 }));
+}
+
+TEST(ValidateManyVariadicTest, MultipleRulesAllMustPassForEveryObject)
+{
+    auto model = vd::basic_model<Point>()
+                     .with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)))
+                     .with(vd::member(&Point::y, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_TRUE(vd::validate_many(model, Point { 1.0, 1.0 }, Point { 5.0, 5.0 }));
+    EXPECT_FALSE(vd::validate_many(model, Point { 1.0, 1.0 }, Point { 5.0, 11.0 })); // second y fails
+}
+
+// ---------------------------------------------------------------------------
+// vd::validate_many — vector<T> overload
+// ---------------------------------------------------------------------------
+
+TEST(ValidateManyVectorTest, EmptyVectorReturnsTrue)
+{
+    // all_of on an empty range is vacuously true.
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_TRUE(vd::validate_many(model, std::vector<Point> {}));
+}
+
+TEST(ValidateManyVectorTest, AllValidElementsReturnsTrue)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    std::vector<Point> pts { { 0.0, 0.0 }, { 5.0, 0.0 }, { 10.0, 0.0 } };
+    EXPECT_TRUE(vd::validate_many(model, pts));
+}
+
+TEST(ValidateManyVectorTest, OneInvalidElementReturnsFalse)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    std::vector<Point> pts { { 1.0, 0.0 }, { -1.0, 0.0 }, { 5.0, 0.0 } };
+    EXPECT_FALSE(vd::validate_many(model, pts));
+}
+
+TEST(ValidateManyVectorTest, AllInvalidElementsReturnsFalse)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    std::vector<Point> pts { { -1.0, 0.0 }, { 11.0, 0.0 } };
+    EXPECT_FALSE(vd::validate_many(model, pts));
+}
+
+TEST(ValidateManyVectorTest, MultipleRulesAppliedToEachElement)
+{
+    auto model = vd::basic_model<Point>()
+                     .with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)))
+                     .with(vd::member(&Point::y, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    std::vector<Point> all_valid { { 1.0, 1.0 }, { 5.0, 5.0 }, { 10.0, 10.0 } };
+    EXPECT_TRUE(vd::validate_many(model, all_valid));
+
+    std::vector<Point> one_bad { { 1.0, 1.0 }, { 5.0, 15.0 } }; // second y out of range
+    EXPECT_FALSE(vd::validate_many(model, one_bad));
+}
+
+// ---------------------------------------------------------------------------
+// vd::validate_many — vector<T*> overload (non-owning mutable pointers)
+// ---------------------------------------------------------------------------
+
+TEST(ValidateManyPtrVectorTest, AllValidPointersReturnsTrue)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    Point a { 1.0, 0.0 }, b { 5.0, 0.0 }, c { 10.0, 0.0 };
+    std::vector<Point*> ptrs { &a, &b, &c };
+    EXPECT_TRUE(vd::validate_many(model, ptrs));
+}
+
+TEST(ValidateManyPtrVectorTest, OneInvalidPointerReturnsFalse)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    Point a { 1.0, 0.0 }, b { -1.0, 0.0 }, c { 5.0, 0.0 };
+    std::vector<Point*> ptrs { &a, &b, &c };
+    EXPECT_FALSE(vd::validate_many(model, ptrs));
+}
+
+TEST(ValidateManyPtrVectorTest, EmptyVectorReturnsTrue)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    std::vector<Point*> ptrs {};
+    EXPECT_TRUE(vd::validate_many(model, ptrs));
+}
+
+TEST(ValidateManyPtrVectorTest, NullPointerInVectorReturnsFalse)
+{
+    // is_valid(nullptr) returns false, so a null element must fail the whole check.
+    auto model = vd::basic_model<Point>();
+
+    Point a { 1.0, 0.0 };
+    std::vector<Point*> ptrs { &a, nullptr };
+    EXPECT_FALSE(vd::validate_many(model, ptrs));
+}
+
+// ---------------------------------------------------------------------------
+// vd::validate_many — vector<const T*> overload (non-owning const pointers)
+// ---------------------------------------------------------------------------
+
+TEST(ValidateManyConstPtrVectorTest, AllValidConstPointersReturnsTrue)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    const Point a { 2.0, 0.0 }, b { 8.0, 0.0 };
+    std::vector<const Point*> ptrs { &a, &b };
+    EXPECT_TRUE(vd::validate_many(model, ptrs));
+}
+
+TEST(ValidateManyConstPtrVectorTest, OneInvalidConstPointerReturnsFalse)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    const Point a { 2.0, 0.0 }, b { 15.0, 0.0 };
+    std::vector<const Point*> ptrs { &a, &b };
+    EXPECT_FALSE(vd::validate_many(model, ptrs));
+}
+
+TEST(ValidateManyConstPtrVectorTest, EmptyVectorReturnsTrue)
+{
+    auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    std::vector<const Point*> ptrs {};
+    EXPECT_TRUE(vd::validate_many(model, ptrs));
+}
+
+TEST(ValidateManyConstPtrVectorTest, NullPointerInVectorReturnsFalse)
+{
+    auto model = vd::basic_model<Point>();
+
+    const Point a { 1.0, 0.0 };
+    std::vector<const Point*> ptrs { &a, nullptr };
+    EXPECT_FALSE(vd::validate_many(model, ptrs));
+}

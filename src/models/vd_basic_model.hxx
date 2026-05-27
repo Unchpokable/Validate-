@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #ifndef VD_BASIC_MODEL_HXX
 #define VD_BASIC_MODEL_HXX
 
@@ -150,4 +151,39 @@ bool basic_model<T>::is_valid(const_pointer_type object) const
 }
 } // namespace vd
 
+namespace vd
+{
+template<typename T, typename... Args>
+requires(std::same_as<std::decay_t<Args>, T> && ...)
+bool validate_many(const basic_model<T>& model, Args&&... objects)
+{
+    return (model.is_valid(objects) && ...);
+}
+
+template<typename T>
+bool validate_many(const basic_model<T>& model, const std::vector<T>& objects)
+{
+    return std::ranges::all_of(objects, [&model](const T& obj) {
+        return model.is_valid(obj);
+    });
+}
+
+template<typename T>
+requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
+bool validate_many(const basic_model<T>& model, const std::vector<T*>& object_ptrs)
+{
+    return std::ranges::all_of(object_ptrs, [&model](const T* obj) {
+        return model.is_valid(obj);
+    });
+}
+
+template<typename T>
+requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
+bool validate_many(const basic_model<T>& model, const std::vector<const T*>& object_ptrs)
+{
+    return std::ranges::all_of(object_ptrs, [&model](const T* obj) {
+        return model.is_valid(obj);
+    });
+}
+} // namespace vd
 #endif // VD_BASIC_MODEL_HXX

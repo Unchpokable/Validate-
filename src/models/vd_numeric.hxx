@@ -24,38 +24,64 @@ struct numeric_bounds final {
     const T min;
     const T max;
 
+private:
+    bool inverse_condition { false };
+
+public:
     constexpr numeric_bounds(T min, T max) : min(min), max(max)
     {
     }
 
     constexpr bool operator()(const T& value) const
     {
-        return value >= min && value <= max;
+        bool result = value >= min && value <= max;
+        return inverse_condition ? !result : result;
     }
 
+    /// [min, max]
     static constexpr numeric_bounds<T> inclusive(T min, T max)
     {
         return { min, max };
     }
 
+    /// (min, max)
     static constexpr numeric_bounds<T> exclusive(T min, T max)
     {
         return { vd::ct_nextafter(min, std::numeric_limits<T>::max()), vd::ct_nextafter(max, std::numeric_limits<T>::lowest()) };
     }
 
+    /// (min, +inf)
     static constexpr numeric_bounds<T> greater_than(T min)
     {
         return { vd::ct_nextafter(min, std::numeric_limits<T>::max()), std::numeric_limits<T>::max() };
     }
 
+    /// (-inf, max)
     static constexpr numeric_bounds<T> less_than(T max)
     {
         return { std::numeric_limits<T>::lowest(), vd::ct_nextafter(max, std::numeric_limits<T>::lowest()) };
     }
 
+    /// (-inf, +inf)
     static constexpr numeric_bounds<T> unbounded()
     {
         return { std::numeric_limits<T>::lowest(), std::numeric_limits<T>::max() };
+    }
+
+    /// { (-inf, lower_bound], [upper_bound, +inf) }
+    static constexpr numeric_bounds<T> outside_inclusive(T lower_bound, T upper_bound)
+    {
+        auto bounds = exclusive(lower_bound, upper_bound);
+        bounds.inverse_condition = true;
+        return bounds;
+    }
+
+    /// { (-inf, lower_bound), (upper_bound, +inf) }
+    static constexpr numeric_bounds<T> outside_exclusive(T lower_bound, T upper_bound)
+    {
+        auto bounds = inclusive(lower_bound, upper_bound);
+        bounds.inverse_condition = true;
+        return bounds;
     }
 };
 
