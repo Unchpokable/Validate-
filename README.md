@@ -1,6 +1,6 @@
 # Validate!
 
-A header-only C++20 library for declarative data validation. Define validation rules once as a *model*, then apply it to any number of objects. Ships with modern type-safe assertion utilities as a drop-in replacement for the C `assert()` macro.
+A C++20 library for declarative data validation. Define validation rules once as a *model*, then apply it to any number of objects. Ships with modern type-safe assertion utilities as a drop-in replacement for the C `assert()` macro.
 
 ```cpp
 #include <vd.hxx>

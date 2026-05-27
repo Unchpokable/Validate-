@@ -29,7 +29,7 @@ struct assert_format {
 namespace vd
 {
 template<typename... Args>
-inline void require(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void require(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
         details::assert_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc);
@@ -38,7 +38,7 @@ inline void require(bool condition, details::assert_format<std::type_identity_t<
 
 template<typename ExceptionType, typename... Args>
 requires std::derived_from<ExceptionType, std::exception>
-inline void require(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void require(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
         throw ExceptionType(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
@@ -47,12 +47,65 @@ inline void require(bool condition, details::assert_format<std::type_identity_t<
 
 template<auto OnFailed, typename... Args>
 requires std::invocable<decltype(OnFailed), std::string>
-inline void require_callback(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void require_callback(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
         OnFailed(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
     }
 }
+
+#ifndef _NDEBUG
+
+/// same as require() but working only in debug builds
+template<typename... Args>
+void required(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+{
+    if(!condition) {
+        details::assert_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc);
+    }
+}
+
+/// same as require() but working only in debug builds
+template<typename ExceptionType, typename... Args>
+requires std::derived_from<ExceptionType, std::exception>
+void required(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+{
+    if(!condition) {
+        throw ExceptionType(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
+    }
+}
+
+/// same as require_callback() but working only in debug builds
+template<auto OnFailed, typename... Args>
+requires std::invocable<decltype(OnFailed), std::string>
+void require_callbackd(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+{
+    if(!condition) {
+        OnFailed(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
+    }
+}
+
+#else
+
+template<typename... Args>
+void required(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+{
+}
+
+template<typename ExceptionType, typename... Args>
+requires std::derived_from<ExceptionType, std::exception>
+void required(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+{
+}
+
+template<auto OnFailed, typename... Args>
+requires std::invocable<decltype(OnFailed), std::string>
+void require_callbackd(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+{
+}
+
+#endif
+
 } // namespace vd
 
 #endif // VD_IMPL_ASSERT_HXX
