@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Unchp\\\\source\\\\repos\\\\Validate!\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "Bash(cd /c/Users/Unchp/source/repos/Validate && find . -type d | head -50)",
+      "Read(//c/Users/Unchp/source/repos/**)"
+    ]
+  }
+}
