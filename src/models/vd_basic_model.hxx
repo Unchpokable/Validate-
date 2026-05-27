@@ -20,6 +20,7 @@ template<typename T>
 struct basic_bound_model;
 
 template<typename T>
+requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
 struct basic_model {
     using const_pointer_type = std::add_pointer_t<std::add_const_t<T>>;
     using const_reference_type = std::add_lvalue_reference_t<std::add_const_t<T>>;
@@ -137,6 +138,7 @@ private:
 };
 
 template<typename T>
+requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
 bool basic_model<T>::is_valid(const_pointer_type object) const
 {
     if(object == nullptr) {
