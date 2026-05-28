@@ -11,7 +11,7 @@
 #include <QString>
 #include <QStringView>
 
-#include "vd_core.hxx"
+#include "core/vd_result.hxx"
 
 namespace vd::qt::string_rules
 {
@@ -31,8 +31,12 @@ struct qstring_match {
     std::string_view check_description = "string check failed";
 
     constexpr qstring_match() = default;
-    constexpr qstring_match(mode m) : match_mode(m) {}
-    constexpr qstring_match(mode m, std::string_view desc) : match_mode(m), check_description(desc) {}
+    constexpr qstring_match(mode m) : match_mode(m)
+    {
+    }
+    constexpr qstring_match(mode m, std::string_view desc) : match_mode(m), check_description(desc)
+    {
+    }
 
     vd::result operator()(QStringView s) const
     {
@@ -71,27 +75,27 @@ bool qregex(QStringView s, const QString& pattern);
 
 namespace vd::qt::string_rules
 {
-inline qstring_match<detail::empty_string> empty()
+constexpr inline qstring_match<detail::empty_string> empty()
 {
     return { qstring_match<detail::empty_string>::mode::include, "string must be empty" };
 }
 
-inline qstring_match<detail::non_empty_string> non_empty()
+constexpr inline qstring_match<detail::non_empty_string> non_empty()
 {
     return { qstring_match<detail::non_empty_string>::mode::include, "string must be non-empty" };
 }
 
-inline qstring_match<detail::empty_or_whitespace_string> empty_or_whitespace()
+constexpr inline qstring_match<detail::empty_or_whitespace_string> empty_or_whitespace()
 {
     return { qstring_match<detail::empty_or_whitespace_string>::mode::include, "string must be empty or whitespace-only" };
 }
 
-inline qstring_match<detail::email_like> email_like()
+constexpr inline qstring_match<detail::email_like> email_like()
 {
     return { qstring_match<detail::email_like>::mode::include, "string does not look like an email address" };
 }
 
-inline qstring_match<detail::uri_like> uri_like()
+constexpr inline qstring_match<detail::uri_like> uri_like()
 {
     return { qstring_match<detail::uri_like>::mode::include, "string does not look like a URI" };
 }

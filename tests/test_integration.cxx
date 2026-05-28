@@ -169,19 +169,19 @@ TEST_F(UserRegistrationTest, AllFieldsInvalid_StillFails)
     EXPECT_FALSE(model.is_valid(UserRegistration { "", "bad-email", 15, "short" }));
 }
 
-TEST_F(UserRegistrationTest, DeadCheck_Valid_DoesNotThrow)
+TEST_F(UserRegistrationTest, DieIfFailed_Valid_DoesNotThrow)
 {
-    EXPECT_NO_THROW(model.dead_check(valid));
+    EXPECT_NO_THROW(model.die_if_failed(valid));
 }
 
-TEST_F(UserRegistrationTest, DeadCheck_Invalid_ThrowsValidationException)
+TEST_F(UserRegistrationTest, DieIfFailed_Invalid_ThrowsValidationException)
 {
-    EXPECT_THROW(model.dead_check(UserRegistration { "", "bad", 15, "x" }), vd::validation_exception);
+    EXPECT_THROW(model.die_if_failed(UserRegistration { "", "bad", 15, "x" }), vd::validation_exception);
 }
 
-TEST_F(UserRegistrationTest, DeadCheck_ExceptionCaughtAsStdException)
+TEST_F(UserRegistrationTest, DieIfFailed_ExceptionCaughtAsStdException)
 {
-    EXPECT_THROW(model.dead_check(UserRegistration { "", "bad", 15, "x" }), std::exception);
+    EXPECT_THROW(model.die_if_failed(UserRegistration { "", "bad", 15, "x" }), std::exception);
 }
 
 TEST_F(UserRegistrationTest, ServiceBoundaryPattern_InvalidInput_BlocksProcessing)
@@ -190,7 +190,7 @@ TEST_F(UserRegistrationTest, ServiceBoundaryPattern_InvalidInput_BlocksProcessin
     UserRegistration bad { "user", "invalid@@@email", 25, "goodpassword" };
 
     try {
-        model.dead_check(bad);
+        model.die_if_failed(bad);
         processed = true;
     }
     catch(const vd::validation_exception&) {
@@ -204,7 +204,7 @@ TEST_F(UserRegistrationTest, ServiceBoundaryPattern_ValidInput_Proceeds)
     bool processed = false;
 
     try {
-        model.dead_check(valid);
+        model.die_if_failed(valid);
         processed = true;
     }
     catch(const vd::validation_exception&) {
@@ -597,9 +597,9 @@ TEST(BoundModelReferenceSemantics, DeadCheck_AfterMutation_ThrowsWhenInvalid)
     auto model = vd::int_model {}.with(vd::rule<std::int32_t>(vd::int_bounds::inclusive(1, 10)));
     auto bound = model.bind(value);
 
-    EXPECT_NO_THROW(bound.dead_check());
+    EXPECT_NO_THROW(bound.die_if_failed());
     value = 0;
-    EXPECT_THROW(bound.dead_check(), vd::validation_exception);
+    EXPECT_THROW(bound.die_if_failed(), vd::validation_exception);
 }
 
 TEST(BoundModelReferenceSemantics, BindNull_Aborts)
@@ -888,4 +888,149 @@ TEST(DynamicModelBuildingTest, ModelExtendedAtRuntime_NewRuleEnforced)
 
     p.price = 0.0;
     EXPECT_FALSE(model.is_valid(p)); // 0 not > 0
+}
+
+// ============================================================================
+// 13. vd::result API — result object content inspection
+//
+// These tests verify that model.is_valid() returns a vd::result that carries
+// not only a pass/fail flag but also diagnostic messages from the rules that
+// failed. Rule message propagation depends on what the checker returns:
+//
+//  - Checker returns vd::result  (string_rules, numeric_bounds): the checker's
+//    own message is forwarded into result.failed_rules.
+//  - Checker returns bool (plain lambda): vd::member generates a fallback
+//    message "Field '<name>' failed validation" using the supplied field name.
+//
+// vd::result also supports direct construction via result::ok() / result::failed()
+// and exposes die_if_failed() + format() for pipeline-style error handling.
+// ============================================================================
+
+TEST(ResultObjectTest, Ok_IsValidTrue_NoFailedRules)
+{
+    auto r = vd::result::ok();
+    EXPECT_TRUE(r.is_valid);
+    EXPECT_TRUE(r.failed_rules.empty());
+    EXPECT_TRUE(static_cast<bool>(r));
+}
+
+TEST(ResultObjectTest, Failed_IsValidFalse_CarriesAllMessages)
+{
+    auto r = vd::result::failed({ "first error", "second error" });
+    EXPECT_FALSE(r.is_valid);
+    EXPECT_FALSE(static_cast<bool>(r));
+    ASSERT_EQ(r.failed_rules.size(), 2u);
+    EXPECT_EQ(r.failed_rules[0], "first error");
+    EXPECT_EQ(r.failed_rules[1], "second error");
+}
+
+TEST(ResultObjectTest, DieIfFailed_OkResult_DoesNotThrow)
+{
+    EXPECT_NO_THROW(vd::result::ok().die_if_failed());
+}
+
+TEST(ResultObjectTest, DieIfFailed_FailedResult_ThrowsValidationException)
+{
+    auto r = vd::result::failed({ "something went wrong" });
+    EXPECT_THROW(r.die_if_failed(), vd::validation_exception);
+}
+
+TEST(ResultObjectTest, DieIfFailed_ExceptionMessage_IsNonEmpty)
+{
+    auto r = vd::result::failed({ "some descriptive error" });
+    try {
+        r.die_if_failed();
+        FAIL() << "Expected vd::validation_exception";
+    }
+    catch(const vd::validation_exception& ex) {
+        EXPECT_NE(std::string(ex.what()), "");
+    }
+}
+
+TEST(ResultObjectTest, Format_FailedResult_EachMessageAppearsInReport)
+{
+    auto r = vd::result::failed({ "field X is wrong", "value out of bounds" });
+    std::string report = r.format();
+    EXPECT_NE(report.find("field X is wrong"), std::string::npos);
+    EXPECT_NE(report.find("value out of bounds"), std::string::npos);
+}
+
+TEST(ResultObjectTest, ModelPasses_Result_IsValidAndEmptyFailedRules)
+{
+    UserRegistration good { "alice", "alice@example.com", 25, "securepass!" };
+    auto r = make_registration_model().is_valid(good);
+    EXPECT_TRUE(r.is_valid);
+    EXPECT_TRUE(r.failed_rules.empty());
+}
+
+// string_rules::non_empty() returns vd::result; vd::member propagates its
+// message directly — the field name does NOT appear, the checker description does.
+TEST(ResultObjectTest, NamedMemberStringRule_EmptyString_MessageIsCheckerDescription)
+{
+    auto model = vd::basic_model<UserRegistration> {}
+                     .with(vd::member("username", &UserRegistration::username, vd::string_rules::non_empty()));
+
+    auto r = model.is_valid(UserRegistration { "", "a@b.com", 25, "pass1234" });
+
+    EXPECT_FALSE(r.is_valid);
+    ASSERT_EQ(r.failed_rules.size(), 1u);
+    EXPECT_EQ(r.failed_rules[0], "string must be non-empty");
+}
+
+TEST(ResultObjectTest, NamedMemberEmailRule_InvalidEmail_MessageDescribesEmailFailure)
+{
+    auto model = vd::basic_model<UserRegistration> {}
+                     .with(vd::member("email", &UserRegistration::email, vd::string_rules::email_like()));
+
+    auto r = model.is_valid(UserRegistration { "alice", "notanemail", 25, "pass1234" });
+
+    EXPECT_FALSE(r.is_valid);
+    ASSERT_EQ(r.failed_rules.size(), 1u);
+    EXPECT_EQ(r.failed_rules[0], "string does not look like an email address");
+}
+
+// numeric_bounds returns vd::result; vd::member propagates it.
+// Message includes the actual value and the configured bounds.
+TEST(ResultObjectTest, UnnamedMemberNumericBounds_OutOfRange_MessageContainsValueAndBounds)
+{
+    auto model = vd::basic_model<UserRegistration> {}
+                     .with(vd::member(&UserRegistration::age, vd::int_bounds::inclusive(18, 120)));
+
+    auto r = model.is_valid(UserRegistration { "alice", "a@b.com", 15, "pass1234" });
+
+    EXPECT_FALSE(r.is_valid);
+    ASSERT_EQ(r.failed_rules.size(), 1u);
+    EXPECT_NE(r.failed_rules[0].find("15"), std::string::npos);
+    EXPECT_NE(r.failed_rules[0].find("18"), std::string::npos);
+    EXPECT_NE(r.failed_rules[0].find("120"), std::string::npos);
+}
+
+// When the checker returns plain bool, vd::member synthesises the message from
+// the supplied field name: "Field '<name>' failed validation".
+TEST(ResultObjectTest, NamedMemberBoolChecker_Fails_MessageContainsFieldName)
+{
+    auto model = vd::basic_model<UserRegistration> {}
+                     .with(vd::member("password", &UserRegistration::password, [](const std::string& p) {
+                         return p.size() >= 8;
+                     }));
+
+    auto r = model.is_valid(UserRegistration { "alice", "a@b.com", 25, "short" });
+
+    EXPECT_FALSE(r.is_valid);
+    ASSERT_EQ(r.failed_rules.size(), 1u);
+    EXPECT_NE(r.failed_rules[0].find("password"), std::string::npos);
+}
+
+// Service-boundary use case: the caller uses result-as-bool to gate processing
+// and can also inspect failed_rules to build a diagnostic response.
+TEST(ResultObjectTest, ServiceBoundary_ResultInspection_GatesProcessingAndProvidesReport)
+{
+    auto model = make_server_config_model();
+    ServerConfig bad { "", 0, 0, -1.0 };
+
+    auto r = model.is_valid(bad);
+
+    ASSERT_FALSE(r); // operator bool() gates further processing
+    EXPECT_FALSE(r.failed_rules.empty()); // at least the first failure is captured
+    EXPECT_FALSE(r.format().empty());     // human-readable report is available
 }

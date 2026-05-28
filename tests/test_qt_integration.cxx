@@ -746,7 +746,7 @@ TEST(QtDeadCheck, ThrowsOnFailingQtProperty)
     session.setTtl(3600);
     session.setUserId("u");
 
-    EXPECT_THROW(model.dead_check(session), vd::validation_exception);
+    EXPECT_THROW(model.die_if_failed(session), vd::validation_exception);
 }
 
 TEST(QtDeadCheck, DoesNotThrowWhenAllPropertiesValid)
@@ -757,7 +757,7 @@ TEST(QtDeadCheck, DoesNotThrowWhenAllPropertiesValid)
     session.setTtl(3600);
     session.setUserId("user_1");
 
-    EXPECT_NO_THROW(model.dead_check(session));
+    EXPECT_NO_THROW(model.die_if_failed(session));
 }
 
 TEST(QtDeadCheck, BoundModelDeadCheckThrowsAfterMutation)
@@ -769,10 +769,10 @@ TEST(QtDeadCheck, BoundModelDeadCheckThrowsAfterMutation)
     session.setUserId("u");
 
     auto bound = model.bind(session);
-    EXPECT_NO_THROW(bound.dead_check());
+    EXPECT_NO_THROW(bound.die_if_failed());
 
     session.setTtl(0);
-    EXPECT_THROW(bound.dead_check(), vd::validation_exception);
+    EXPECT_THROW(bound.die_if_failed(), vd::validation_exception);
 }
 
 TEST(QtDeadCheck, ThrowsWhenNestedModelDeepInChainFails)
@@ -781,7 +781,7 @@ TEST(QtDeadCheck, ThrowsWhenNestedModelDeepInChainFails)
     AddressObject addr("Street 1", &bad_city);
     UserAccount user("alice", "alice@example.com", 30, &addr);
 
-    EXPECT_THROW(make_user_model(make_address_model(make_city_model())).dead_check(user), vd::validation_exception);
+    EXPECT_THROW(make_user_model(make_address_model(make_city_model())).die_if_failed(user), vd::validation_exception);
 }
 
 TEST(QtDeadCheck, ExceptionIsvdValidationException)
@@ -793,7 +793,7 @@ TEST(QtDeadCheck, ExceptionIsvdValidationException)
     session.setUserId("u");
 
     try {
-        model.dead_check(session);
+        model.die_if_failed(session);
         FAIL() << "Expected vd::validation_exception";
     }
     catch(const vd::validation_exception& ex) {
@@ -1189,8 +1189,14 @@ public:
         : QObject(parent), m_name(name), m_headcount(headcount)
     {
     }
-    QString name() const { return m_name; }
-    int headcount() const { return m_headcount; }
+    QString name() const
+    {
+        return m_name;
+    }
+    int headcount() const
+    {
+        return m_headcount;
+    }
 
 private:
     QString m_name;
@@ -1203,14 +1209,22 @@ class EmployeeObject : public QObject {
     Q_PROPERTY(QString role READ role)
     Q_PROPERTY(DepartmentObject* department READ department)
 public:
-    explicit EmployeeObject(const QString& name, const QString& role, DepartmentObject* dept,
-        QObject* parent = nullptr)
+    explicit EmployeeObject(const QString& name, const QString& role, DepartmentObject* dept, QObject* parent = nullptr)
         : QObject(parent), m_name(name), m_role(role), m_department(dept)
     {
     }
-    QString name() const { return m_name; }
-    QString role() const { return m_role; }
-    DepartmentObject* department() const { return m_department; }
+    QString name() const
+    {
+        return m_name;
+    }
+    QString role() const
+    {
+        return m_role;
+    }
+    DepartmentObject* department() const
+    {
+        return m_department;
+    }
 
 private:
     QString m_name, m_role;
@@ -1223,14 +1237,22 @@ class ProjectObject : public QObject {
     Q_PROPERTY(EmployeeObject* lead READ lead)
     Q_PROPERTY(DepartmentObject* owner_dept READ ownerDept)
 public:
-    explicit ProjectObject(const QString& title, EmployeeObject* lead, DepartmentObject* owner,
-        QObject* parent = nullptr)
+    explicit ProjectObject(const QString& title, EmployeeObject* lead, DepartmentObject* owner, QObject* parent = nullptr)
         : QObject(parent), m_title(title), m_lead(lead), m_ownerDept(owner)
     {
     }
-    QString title() const { return m_title; }
-    EmployeeObject* lead() const { return m_lead; }
-    DepartmentObject* ownerDept() const { return m_ownerDept; }
+    QString title() const
+    {
+        return m_title;
+    }
+    EmployeeObject* lead() const
+    {
+        return m_lead;
+    }
+    DepartmentObject* ownerDept() const
+    {
+        return m_ownerDept;
+    }
 
 private:
     QString m_title;
@@ -1244,13 +1266,33 @@ class MutableEmployee : public QObject {
     Q_PROPERTY(QString role READ role WRITE setRole)
     Q_PROPERTY(DepartmentObject* department READ department WRITE setDepartment)
 public:
-    explicit MutableEmployee(QObject* parent = nullptr) : QObject(parent) {}
-    QString name() const { return m_name; }
-    QString role() const { return m_role; }
-    DepartmentObject* department() const { return m_department; }
-    void setName(const QString& n) { m_name = n; }
-    void setRole(const QString& r) { m_role = r; }
-    void setDepartment(DepartmentObject* d) { m_department = d; }
+    explicit MutableEmployee(QObject* parent = nullptr) : QObject(parent)
+    {
+    }
+    QString name() const
+    {
+        return m_name;
+    }
+    QString role() const
+    {
+        return m_role;
+    }
+    DepartmentObject* department() const
+    {
+        return m_department;
+    }
+    void setName(const QString& n)
+    {
+        m_name = n;
+    }
+    void setRole(const QString& r)
+    {
+        m_role = r;
+    }
+    void setDepartment(DepartmentObject* d)
+    {
+        m_department = d;
+    }
 
 private:
     QString m_name, m_role;
@@ -1268,18 +1310,16 @@ static vd::basic_model<DepartmentObject> make_department_model()
             [](const QString& s) {
                 return !s.isEmpty();
             }))
-        .with(vd::qt::qt_property<DepartmentObject>("headcount",
-            [](int h) {
-                return h > 0;
-            }));
+        .with(vd::qt::qt_property<DepartmentObject>("headcount", [](int h) {
+            return h > 0;
+        }));
 }
 
 // Approach A: qt_property with DepartmentObject* as the checker argument type.
 // PropT is deduced as DepartmentObject*.  The QVariant returned by property()
 // stores DepartmentObject* exactly, so canConvert<DepartmentObject*>() is an
 // exact-type hit — no upcast or registered conversion needed.
-static vd::basic_model<EmployeeObject> make_employee_model_via_typed_ptr(
-    vd::basic_model<DepartmentObject> dept_model)
+static vd::basic_model<EmployeeObject> make_employee_model_via_typed_ptr(vd::basic_model<DepartmentObject> dept_model)
 {
     return vd::basic_model<EmployeeObject> {}
         .with(vd::qt::qt_property<EmployeeObject>("name",
@@ -1290,10 +1330,9 @@ static vd::basic_model<EmployeeObject> make_employee_model_via_typed_ptr(
             [](const QString& s) {
                 return !s.isEmpty();
             }))
-        .with(vd::qt::qt_property<EmployeeObject>("department",
-            [dm = std::move(dept_model)](DepartmentObject* d) {
-                return d != nullptr && dm.is_valid(*d);
-            }));
+        .with(vd::qt::qt_property<EmployeeObject>("department", [dm = std::move(dept_model)](DepartmentObject* d) {
+            return d != nullptr && dm.is_valid(*d);
+        }));
 }
 
 // Approach B: qt_property with QObject* as the checker argument type.
@@ -1301,8 +1340,7 @@ static vd::basic_model<EmployeeObject> make_employee_model_via_typed_ptr(
 // is Qt-version-dependent — on some builds this path silently returns false
 // because QVariant does not register automatic pointer upcasts.
 // qobject_cast is used inside the checker to safely attempt the downcast.
-static vd::basic_model<EmployeeObject> make_employee_model_via_qobject_ptr(
-    vd::basic_model<DepartmentObject> dept_model)
+static vd::basic_model<EmployeeObject> make_employee_model_via_qobject_ptr(vd::basic_model<DepartmentObject> dept_model)
 {
     return vd::basic_model<EmployeeObject> {}
         .with(vd::qt::qt_property<EmployeeObject>("name",
@@ -1313,17 +1351,15 @@ static vd::basic_model<EmployeeObject> make_employee_model_via_qobject_ptr(
             [](const QString& s) {
                 return !s.isEmpty();
             }))
-        .with(vd::qt::qt_property<EmployeeObject>("department",
-            [dm = std::move(dept_model)](QObject* d) {
-                auto* dept = qobject_cast<DepartmentObject*>(d);
-                return dept != nullptr && dm.is_valid(*dept);
-            }));
+        .with(vd::qt::qt_property<EmployeeObject>("department", [dm = std::move(dept_model)](QObject* d) {
+            auto* dept = qobject_cast<DepartmentObject*>(d);
+            return dept != nullptr && dm.is_valid(*dept);
+        }));
 }
 
 // Approach C: vd::predicate bypassing QVariant entirely — calls the C++ getter
 // directly.  This is the established safe pattern from Groups 1-5.
-static vd::basic_model<EmployeeObject> make_employee_model_via_predicate(
-    vd::basic_model<DepartmentObject> dept_model)
+static vd::basic_model<EmployeeObject> make_employee_model_via_predicate(vd::basic_model<DepartmentObject> dept_model)
 {
     return vd::basic_model<EmployeeObject> {}
         .with(vd::qt::qt_property<EmployeeObject>("name",
@@ -1342,8 +1378,7 @@ static vd::basic_model<EmployeeObject> make_employee_model_via_predicate(
 
 // Project model: two QObject* Q_PROPERTYs validated via typed-pointer checkers.
 static vd::basic_model<ProjectObject> make_project_model(
-    vd::basic_model<EmployeeObject> emp_model,
-    vd::basic_model<DepartmentObject> dept_model)
+    vd::basic_model<EmployeeObject> emp_model, vd::basic_model<DepartmentObject> dept_model)
 {
     return vd::basic_model<ProjectObject> {}
         .with(vd::qt::qt_property<ProjectObject>("title",
@@ -1354,10 +1389,9 @@ static vd::basic_model<ProjectObject> make_project_model(
             [em = std::move(emp_model)](EmployeeObject* e) {
                 return e != nullptr && em.is_valid(*e);
             }))
-        .with(vd::qt::qt_property<ProjectObject>("owner_dept",
-            [dm = std::move(dept_model)](DepartmentObject* d) {
-                return d != nullptr && dm.is_valid(*d);
-            }));
+        .with(vd::qt::qt_property<ProjectObject>("owner_dept", [dm = std::move(dept_model)](DepartmentObject* d) {
+            return d != nullptr && dm.is_valid(*d);
+        }));
 }
 
 // ---------------------------------------------------------------------------
@@ -1443,18 +1477,18 @@ TEST(QtQObjectPointerPropertyValidation, HybridModelScalarQtPropertyAndPointerPr
     // vd::predicate.  Both rule types coexist in the same basic_model<>.
     auto dept_model = make_department_model();
     auto model = vd::basic_model<EmployeeObject> {}
-        .with(vd::qt::qt_property<EmployeeObject>("name",
-            [](const QString& s) {
-                return !s.isEmpty();
-            }))
-        .with(vd::qt::qt_property<EmployeeObject>("role",
-            [](const QString& s) {
-                return !s.isEmpty();
-            }))
-        .with(vd::predicate([dm = std::move(dept_model)](const EmployeeObject& e) {
-            auto* d = e.department();
-            return d != nullptr && dm.is_valid(*d);
-        }));
+                     .with(vd::qt::qt_property<EmployeeObject>("name",
+                         [](const QString& s) {
+                             return !s.isEmpty();
+                         }))
+                     .with(vd::qt::qt_property<EmployeeObject>("role",
+                         [](const QString& s) {
+                             return !s.isEmpty();
+                         }))
+                     .with(vd::predicate([dm = std::move(dept_model)](const EmployeeObject& e) {
+                         auto* d = e.department();
+                         return d != nullptr && dm.is_valid(*d);
+                     }));
 
     DepartmentObject valid_dept("Sales", 5);
     EmployeeObject valid("Eve", "Lead", &valid_dept);
@@ -1475,14 +1509,13 @@ TEST(QtQObjectPointerPropertyValidation, BoundMutableEmployeeReflectsDepartmentS
     // basic_bound_model stores const T* — re-evaluates on each call, so swapping
     // the department pointer is immediately visible.
     auto model = vd::basic_model<MutableEmployee> {}
-        .with(vd::qt::qt_property<MutableEmployee>("name",
-            [](const QString& s) {
-                return !s.isEmpty();
-            }))
-        .with(vd::qt::qt_property<MutableEmployee>("department",
-            [dm = make_department_model()](DepartmentObject* d) {
-                return d != nullptr && dm.is_valid(*d);
-            }));
+                     .with(vd::qt::qt_property<MutableEmployee>("name",
+                         [](const QString& s) {
+                             return !s.isEmpty();
+                         }))
+                     .with(vd::qt::qt_property<MutableEmployee>("department", [dm = make_department_model()](DepartmentObject* d) {
+                         return d != nullptr && dm.is_valid(*d);
+                     }));
 
     DepartmentObject good("Engineering", 10);
     DepartmentObject bad("", 0);
@@ -1511,7 +1544,7 @@ TEST(QtQObjectPointerPropertyValidation, DeadCheckThrowsWhenPointerPropertyInval
     DepartmentObject bad("", 0);
     EmployeeObject emp("Grace", "Architect", &bad);
 
-    EXPECT_THROW(model.dead_check(emp), vd::validation_exception);
+    EXPECT_THROW(model.die_if_failed(emp), vd::validation_exception);
 }
 
 // Approach B tests: qt_property with QObject* checker (PropT = QObject*).
@@ -1590,9 +1623,7 @@ TEST(QtQObjectPointerPropertyChaining, FullyValidProjectPasses)
     EmployeeObject lead("Grace", "PM", &dept);
     ProjectObject project("Atlas", &lead, &dept);
 
-    auto model = make_project_model(
-        make_employee_model_via_typed_ptr(make_department_model()),
-        make_department_model());
+    auto model = make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
     EXPECT_TRUE(model.is_valid(project));
 }
 
@@ -1601,9 +1632,7 @@ TEST(QtQObjectPointerPropertyChaining, NullLeadFails)
     DepartmentObject dept("R&D", 15);
     ProjectObject project("Atlas", nullptr, &dept);
 
-    auto model = make_project_model(
-        make_employee_model_via_typed_ptr(make_department_model()),
-        make_department_model());
+    auto model = make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
     EXPECT_FALSE(model.is_valid(project));
 }
 
@@ -1613,9 +1642,7 @@ TEST(QtQObjectPointerPropertyChaining, NullOwnerDeptFails)
     EmployeeObject lead("Grace", "PM", &dept);
     ProjectObject project("Atlas", &lead, nullptr);
 
-    auto model = make_project_model(
-        make_employee_model_via_typed_ptr(make_department_model()),
-        make_department_model());
+    auto model = make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
     EXPECT_FALSE(model.is_valid(project));
 }
 
@@ -1625,9 +1652,7 @@ TEST(QtQObjectPointerPropertyChaining, EmptyProjectTitleFails)
     EmployeeObject lead("Grace", "PM", &dept);
     ProjectObject project("", &lead, &dept); // title rule fails
 
-    auto model = make_project_model(
-        make_employee_model_via_typed_ptr(make_department_model()),
-        make_department_model());
+    auto model = make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
     EXPECT_FALSE(model.is_valid(project));
 }
 
@@ -1639,9 +1664,7 @@ TEST(QtQObjectPointerPropertyChaining, BadDeptDeepInLeadChainFails)
     DepartmentObject owner_dept("R&D", 5);
     ProjectObject project("Atlas", &lead, &owner_dept);
 
-    auto model = make_project_model(
-        make_employee_model_via_typed_ptr(make_department_model()),
-        make_department_model());
+    auto model = make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
     EXPECT_FALSE(model.is_valid(project));
 }
 
@@ -1659,9 +1682,7 @@ TEST(QtQObjectPointerPropertyChaining, LeadAndOwnerDeptValidatedIndependently)
     ProjectObject p_bad_lead("X", &bad_lead, &good_dept);
 
     auto make_model = [&]() {
-        return make_project_model(
-            make_employee_model_via_typed_ptr(make_department_model()),
-            make_department_model());
+        return make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
     };
 
     EXPECT_FALSE(make_model().is_valid(p_bad_owner));
@@ -1675,17 +1696,13 @@ TEST(QtQObjectPointerPropertyChaining, ThreeLevelDeadCheckThrowsOnDeepFailure)
     DepartmentObject owner_dept("R&D", 5);
     ProjectObject project("Atlas", &lead, &owner_dept);
 
-    auto model = make_project_model(
-        make_employee_model_via_typed_ptr(make_department_model()),
-        make_department_model());
-    EXPECT_THROW(model.dead_check(project), vd::validation_exception);
+    auto model = make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
+    EXPECT_THROW(model.die_if_failed(project), vd::validation_exception);
 }
 
 TEST(QtQObjectPointerPropertyChaining, CopiedProjectModelIsIndependentOfOriginal)
 {
-    auto model = make_project_model(
-        make_employee_model_via_typed_ptr(make_department_model()),
-        make_department_model());
+    auto model = make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
 
     auto copy = model; // deep copy — each level's closure is independently copied
 
@@ -1697,7 +1714,9 @@ TEST(QtQObjectPointerPropertyChaining, CopiedProjectModelIsIndependentOfOriginal
     EXPECT_TRUE(copy.is_valid(valid));
 
     // Extra rule on the original that rejects everything.
-    model.add_rule(vd::rule<ProjectObject>([](const ProjectObject&) { return false; }));
+    model.add_rule(vd::rule<ProjectObject>([](const ProjectObject&) {
+        return false;
+    }));
     EXPECT_FALSE(model.is_valid(valid));
     EXPECT_TRUE(copy.is_valid(valid)); // copy is unaffected
 }
@@ -1713,23 +1732,150 @@ TEST(QtQObjectPointerPropertyChaining, ProjectModelBuiltWithRvalueChainValidates
     auto dept_model_a = make_department_model();
     auto dept_model_b = make_department_model();
 
-    auto model =
-        vd::basic_model<ProjectObject> {}
-            .with(vd::qt::qt_property<ProjectObject>("title",
-                [](const QString& s) {
-                    return !s.isEmpty();
-                }))
-            .with(vd::qt::qt_property<ProjectObject>("lead",
-                [em = make_employee_model_via_typed_ptr(std::move(dept_model_a))](EmployeeObject* e) {
-                    return e != nullptr && em.is_valid(*e);
-                }))
-            .with(vd::qt::qt_property<ProjectObject>("owner_dept",
-                [dm = std::move(dept_model_b)](DepartmentObject* d) {
-                    return d != nullptr && dm.is_valid(*d);
-                }));
+    auto model = vd::basic_model<ProjectObject> {}
+                     .with(vd::qt::qt_property<ProjectObject>("title",
+                         [](const QString& s) {
+                             return !s.isEmpty();
+                         }))
+                     .with(vd::qt::qt_property<ProjectObject>("lead",
+                         [em = make_employee_model_via_typed_ptr(std::move(dept_model_a))](EmployeeObject* e) {
+                             return e != nullptr && em.is_valid(*e);
+                         }))
+                     .with(vd::qt::qt_property<ProjectObject>("owner_dept", [dm = std::move(dept_model_b)](DepartmentObject* d) {
+                         return d != nullptr && dm.is_valid(*d);
+                     }));
 
     EXPECT_TRUE(model.is_valid(valid));
     EXPECT_FALSE(model.is_valid(bad_title));
+}
+
+// ---------------------------------------------------------------------------
+// Group 12: QtResultApiInspection
+//
+// Tests that vd::result from Qt model validation carries both the pass/fail
+// state and, where available, diagnostic messages.
+//
+// Message propagation rules for Qt models:
+//  - vd::qt::qt_property() with a bool checker synthesises the message
+//    "QProperty <name> validation failed" and stores it in failed_rules.
+//  - vd::qt::qt_property() with a vd::result-returning checker forwards the
+//    checker's own messages into failed_rules.
+//  - vd::field() with a Qt getter + a vd::result-returning checker (e.g.
+//    vd::qt::string_rules::*) propagates the checker message into failed_rules.
+//  - vd::field() with a Qt getter + a bool lambda synthesises the message
+//    "Field '<name>' failed validation" using the supplied field name.
+// ---------------------------------------------------------------------------
+
+TEST(QtResultApiInspection, ValidQtModel_Result_IsValidAndEmptyFailedRules)
+{
+    auto model = make_session_model();
+    MutableSession session;
+    session.setToken("tok_valid");
+    session.setTtl(3600);
+    session.setUserId("user_1");
+
+    auto r = model.is_valid(session);
+    EXPECT_TRUE(r.is_valid);
+    EXPECT_TRUE(r.failed_rules.empty());
+    EXPECT_TRUE(static_cast<bool>(r));
+}
+
+TEST(QtResultApiInspection, FailingQtPropertyWithBoolChecker_ResultIsInvalid_OperatorBoolFalse)
+{
+    auto model = make_session_model();
+    MutableSession session;
+    session.setToken(""); // empty — fails bool checker
+    session.setTtl(3600);
+    session.setUserId("user_1");
+
+    auto r = model.is_valid(session);
+    EXPECT_FALSE(r.is_valid);
+    EXPECT_FALSE(static_cast<bool>(r));
+}
+
+// qt_property() with a bool checker synthesises the message
+// "QProperty <name> validation failed" and puts it in failed_rules.
+TEST(QtResultApiInspection, FailingQtPropertyWithBoolChecker_FailedRulesContainsPropertyName)
+{
+    auto model = vd::basic_model<MutableSession> {}.with(vd::qt::qt_property<MutableSession>("token", [](const QString& s) {
+        return !s.isEmpty();
+    }));
+
+    MutableSession session;
+    session.setToken(""); // fails
+
+    auto r = model.is_valid(session);
+    EXPECT_FALSE(r);
+    ASSERT_EQ(r.failed_rules.size(), 1u);
+    EXPECT_NE(r.failed_rules[0].find("token"), std::string::npos);
+}
+
+// vd::field with a Qt getter + vd::result-returning checker preserves the
+// checker's message in failed_rules.
+TEST(QtResultApiInspection, VdField_WithQtStringRule_EmptyString_MessagePreserved)
+{
+    auto model = vd::basic_model<UserAccount> {}.with(vd::field(&UserAccount::username, vd::qt::string_rules::non_empty()));
+
+    CityObject city("Berlin", "10115");
+    AddressObject addr("Street 1", &city);
+    UserAccount user("", "u@u.com", 30, &addr); // empty username — fails
+
+    auto r = model.is_valid(user);
+    EXPECT_FALSE(r.is_valid);
+    ASSERT_EQ(r.failed_rules.size(), 1u);
+    EXPECT_EQ(r.failed_rules[0], "string must be non-empty");
+}
+
+// vd::field with a named field and bool lambda uses the field name in the message.
+TEST(QtResultApiInspection, VdField_NamedWithBoolChecker_Fails_MessageContainsFieldName)
+{
+    auto model = vd::basic_model<UserAccount> {}.with(vd::field("username", &UserAccount::username, [](const QString& s) {
+        return !s.isEmpty();
+    }));
+
+    CityObject city("Berlin", "10115");
+    AddressObject addr("Street 1", &city);
+    UserAccount user("", "u@u.com", 30, &addr);
+
+    auto r = model.is_valid(user);
+    EXPECT_FALSE(r.is_valid);
+    ASSERT_EQ(r.failed_rules.size(), 1u);
+    EXPECT_NE(r.failed_rules[0].find("username"), std::string::npos);
+}
+
+// format() produces a non-empty report when failed_rules are populated.
+TEST(QtResultApiInspection, FailedResult_VdField_Format_ContainsCheckerMessage)
+{
+    auto model = vd::basic_model<UserAccount> {}.with(vd::field("username", &UserAccount::username, vd::qt::string_rules::non_empty()));
+
+    CityObject city("Berlin", "10115");
+    AddressObject addr("Street 1", &city);
+    UserAccount user("", "u@u.com", 30, &addr);
+
+    auto r = model.is_valid(user);
+    ASSERT_FALSE(r.is_valid);
+    std::string report = r.format();
+    EXPECT_NE(report.find("string must be non-empty"), std::string::npos);
+}
+
+// die_if_failed() on a failed vd::result from a Qt model throws and the
+// exception message is non-empty.
+TEST(QtResultApiInspection, DieIfFailed_OnQtModelFailedResult_ThrowsWithNonEmptyMessage)
+{
+    auto model = vd::basic_model<UserAccount> {}.with(vd::field("username", &UserAccount::username, vd::qt::string_rules::non_empty()));
+
+    CityObject city("Berlin", "10115");
+    AddressObject addr("Street 1", &city);
+    UserAccount user("", "u@u.com", 30, &addr);
+
+    auto r = model.is_valid(user);
+    try {
+        r.die_if_failed();
+        FAIL() << "Expected vd::validation_exception";
+    }
+    catch(const vd::validation_exception& ex) {
+        EXPECT_NE(std::string(ex.what()), "");
+    }
 }
 
 // moc needed because QObject subclasses with Q_OBJECT are defined here.

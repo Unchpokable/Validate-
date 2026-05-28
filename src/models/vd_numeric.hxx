@@ -41,14 +41,12 @@ public:
             return vd::result::ok();
 
         if(!inverse_condition) {
-            return vd::result::failed({ "value " + std::to_string(value) +
-                                        " is not in range [" + std::to_string(min) +
-                                        ", " + std::to_string(max) + "]" });
+            return vd::result::failed(
+                { "value " + std::to_string(value) + " is not in range [" + std::to_string(min) + ", " + std::to_string(max) + "]" });
         }
         else {
-            return vd::result::failed({ "value " + std::to_string(value) +
-                                        " falls within excluded range [" + std::to_string(min) +
-                                        ", " + std::to_string(max) + "]" });
+            return vd::result::failed({ "value " + std::to_string(value) + " falls within excluded range [" + std::to_string(min) + ", "
+                                        + std::to_string(max) + "]" });
         }
     }
 

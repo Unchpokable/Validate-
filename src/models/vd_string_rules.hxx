@@ -25,8 +25,12 @@ struct string_match {
     std::string_view check_description = "string check failed";
 
     constexpr string_match() = default;
-    constexpr string_match(mode m) : match_mode(m) {}
-    constexpr string_match(mode m, std::string_view desc) : match_mode(m), check_description(desc) {}
+    constexpr string_match(mode m) : match_mode(m)
+    {
+    }
+    constexpr string_match(mode m, std::string_view desc) : match_mode(m), check_description(desc)
+    {
+    }
 
     vd::result operator()(std::string_view s) const
     {

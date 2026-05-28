@@ -1,10 +1,14 @@
 #pragma once
 
-#include <type_traits>
 #ifndef VD_RULE_FACTORY_HXX
 #define VD_RULE_FACTORY_HXX
 
-#include "vd_rule.hxx"
+#include <format>
+#include <type_traits>
+
+#include "core/vd_always_false.hxx"
+
+#include "models/vd_rule.hxx"
 
 namespace vd
 {
@@ -27,16 +31,16 @@ auto field(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule<
         if constexpr(std::same_as<checker_return, vd::result>) {
             vd::result r = checker(val);
             if(!r) {
-                r.failed_rules.push_back(std::string(field_name));
+                return vd::result::failed(r.failed_rules);
             }
-            return r;
+            return vd::result::ok();
         }
         else if constexpr(std::convertible_to<checker_return, bool>) {
             bool check_passed = static_cast<bool>(checker(val));
-            return check_passed ? vd::result::ok() : vd::result::failed({ std::string(field_name) });
+            return check_passed ? vd::result::ok() : vd::result::failed({ std::format("Field '{}' failed validation", field_name) });
         }
         else {
-            static_assert(false, "Checker must return bool or vd::result");
+            static_assert(vd::always_false_v<Checker>, "Checker must return bool or vd::result");
         }
     });
 }
@@ -64,16 +68,16 @@ auto member(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule
         if constexpr(std::same_as<checker_return, vd::result>) {
             vd::result r = checker(val);
             if(!r) {
-                r.failed_rules.push_back(std::string(field_name));
+                return vd::result::failed(r.failed_rules);
             }
-            return r;
+            return vd::result::ok();
         }
         else if constexpr(std::convertible_to<checker_return, bool>) {
             bool check_passed = static_cast<bool>(checker(val));
-            return check_passed ? vd::result::ok() : vd::result::failed({ std::string(field_name) });
+            return check_passed ? vd::result::ok() : vd::result::failed({ std::format("Field '{}' failed validation", field_name) });
         }
         else {
-            static_assert(false, "Checker must return bool or vd::result");
+            static_assert(vd::always_false_v<Checker>, "Checker must return bool or vd::result");
         }
     });
 }

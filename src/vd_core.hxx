@@ -7,5 +7,4 @@
 #include "core/vd_exception.hxx"
 #include "core/vd_result.hxx"
 
-
 #endif

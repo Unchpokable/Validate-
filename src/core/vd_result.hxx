@@ -3,9 +3,8 @@
 #ifndef VD_CORE_RESULT_HXX
 #define VD_CORE_RESULT_HXX
 
+#include <string>
 #include <vector>
-
-#include "assert/vd_assert.hxx"
 
 namespace vd
 {
@@ -13,29 +12,21 @@ struct result {
     bool is_valid;
     std::vector<std::string> failed_rules;
 
-    result(bool valid) : is_valid(valid)
-    {
-    }
+    result(bool valid);
 
-    result(bool valid, std::vector<std::string> failed_rules) : is_valid(valid), failed_rules(std::move(failed_rules))
-    {
-    }
+    result(bool valid, std::vector<std::string> failed_rules);
 
-    static result ok()
-    {
-        return { true };
-    }
+    std::string format() const;
 
-    static result failed(std::vector<std::string> failed_rules)
-    {
-        vd::require(!failed_rules.empty(), "Failed result must have at least one failed rule description");
-        return { false, std::move(failed_rules) };
-    }
+    void with_other(const result& other);
 
-    explicit operator bool() const
-    {
-        return is_valid;
-    };
+    void die_if_failed() const;
+
+    static result ok();
+
+    static result failed(std::vector<std::string> failed_rules);
+
+    operator bool() const;
 };
 } // namespace vd
 

@@ -41,6 +41,7 @@ endif()
 add_library(vd STATIC
     src/assert/vd_assert.cxx
     src/models/vd_string_rules.cxx
+    src/core/vd_result.cxx
 )
 add_library(Validate::vd ALIAS vd)
 

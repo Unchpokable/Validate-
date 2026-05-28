@@ -65,11 +65,12 @@ struct rule {
     rule& operator=(const rule&) = default;
     rule& operator=(rule&&) = default;
 
-    bool operator()(const T& obj) const
+    vd::result operator()(const T& obj) const
     {
         return m_predicate(obj);
     }
-    bool operator()(const T* obj) const
+
+    vd::result operator()(const T* obj) const
     {
         return m_predicate(*obj);
     }

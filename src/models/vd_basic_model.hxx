@@ -12,7 +12,8 @@
 
 #include "assert/vd_assert.hxx"
 
-#include "vd_core.hxx"
+#include "core/vd_exception.hxx"
+#include "core/vd_result.hxx"
 
 namespace vd
 {
@@ -30,21 +31,21 @@ struct basic_model {
     {
     }
 
-    bool is_valid(const_pointer_type object) const;
+    vd::result is_valid(const_pointer_type object) const;
 
-    bool is_valid(const_reference_type object) const
+    vd::result is_valid(const_reference_type object) const
     {
         return is_valid(std::addressof(object));
     }
 
-    void dead_check(const_pointer_type object) const
+    void die_if_failed(const_pointer_type object) const
     {
         vd::require<vd::validation_exception>(is_valid(object), "Object failed validation rules");
     }
 
-    void dead_check(const_reference_type object) const
+    void die_if_failed(const_reference_type object) const
     {
-        dead_check(std::addressof(object));
+        die_if_failed(std::addressof(object));
     }
 
     basic_bound_model<T> bind(const_pointer_type object) const
@@ -111,14 +112,14 @@ struct basic_bound_model {
 
     using model_type = basic_model<T>;
 
-    bool is_valid() const
+    vd::result is_valid() const
     {
         return m_model.is_valid(m_object);
     }
 
-    void dead_check() const
+    void die_if_failed() const
     {
-        m_model.dead_check(m_object);
+        m_model.die_if_failed(m_object);
     }
 
     // bind stores a non-owning reference — the model must outlive the bound instance.
@@ -139,17 +140,19 @@ private:
 
 template<typename T>
 requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
-bool basic_model<T>::is_valid(const_pointer_type object) const
+vd::result basic_model<T>::is_valid(const_pointer_type object) const
 {
     if(object == nullptr) {
-        return false;
+        return vd::result(false);
     }
 
+    vd::result final_result(true);
     for(const auto& r : m_rules) {
-        if(!r(*object))
-            return false;
+        vd::result res = r(object);
+        final_result.with_other(res);
     }
-    return true;
+
+    return final_result;
 }
 } // namespace vd
 
