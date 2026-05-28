@@ -9,6 +9,7 @@
 #include <type_traits>
 
 #include "inline_deps/ctre.hpp"
+#include "vd_core.hxx"
 
 namespace vd::string_rules
 {
@@ -21,14 +22,19 @@ requires string_matcher<Matcher>
 struct string_match {
     enum class mode { include, exclude };
     mode match_mode = mode::include;
+    std::string_view check_description = "string check failed";
 
     constexpr string_match() = default;
-    constexpr string_match(mode mode) : match_mode(mode) {};
+    constexpr string_match(mode m) : match_mode(m) {}
+    constexpr string_match(mode m, std::string_view desc) : match_mode(m), check_description(desc) {}
 
-    constexpr bool operator()(std::string_view s) const
+    vd::result operator()(std::string_view s) const
     {
         bool match = Matcher(s);
-        return match_mode == mode::include ? match : !match;
+        bool passes = (match_mode == mode::include) ? match : !match;
+        if(passes)
+            return vd::result::ok();
+        return vd::result::failed({ std::string(check_description) });
     }
 };
 
@@ -40,7 +46,7 @@ struct regex_checker {
     std::regex pattern;
     mode match_mode = mode::include;
 
-    bool operator()(std::string_view s) const;
+    vd::result operator()(std::string_view s) const;
 };
 } // namespace vd::string_rules
 
@@ -78,29 +84,29 @@ namespace vd::string_rules
 {
 constexpr string_match<detail::empty_string> empty()
 {
-    return { string_match<detail::empty_string>::mode::include };
+    return { string_match<detail::empty_string>::mode::include, "string must be empty" };
 }
 
 constexpr string_match<detail::non_empty_string> non_empty()
 {
-    return { string_match<detail::non_empty_string>::mode::include };
+    return { string_match<detail::non_empty_string>::mode::include, "string must be non-empty" };
 }
 
 constexpr string_match<detail::empty_or_whitespace_string> empty_or_whitespace()
 {
-    return { string_match<detail::empty_or_whitespace_string>::mode::include };
+    return { string_match<detail::empty_or_whitespace_string>::mode::include, "string must be empty or whitespace-only" };
 }
 
 constexpr string_match<detail::email_like> email_like()
 {
-    return { string_match<detail::email_like>::mode::include };
+    return { string_match<detail::email_like>::mode::include, "string does not look like an email address" };
 }
 
 regex_checker regex(std::string_view pattern);
 
 constexpr string_match<detail::uri_like> uri_like()
 {
-    return { string_match<detail::uri_like>::mode::include };
+    return { string_match<detail::uri_like>::mode::include, "string does not look like a URI" };
 }
 } // namespace vd::string_rules
 

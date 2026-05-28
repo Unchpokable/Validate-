@@ -662,9 +662,9 @@ TEST(BulkValidationTest, FilterValidRegistrations_IntoAccepted)
 // ============================================================================
 
 static std::vector<std::string> g_errors;
-static void push_error(std::string msg)
+static void push_error(std::string_view msg)
 {
-    g_errors.push_back(std::move(msg));
+    g_errors.push_back(std::move(std::string(msg.data(), msg.size())));
 }
 
 class FieldErrorCollectionTest : public ::testing::Test {

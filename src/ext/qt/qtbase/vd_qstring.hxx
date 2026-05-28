@@ -4,11 +4,14 @@
 #define VD_QSTRING_HXX
 
 #include <concepts>
+#include <string_view>
 #include <type_traits>
 
 #include <QRegularExpression>
 #include <QString>
 #include <QStringView>
+
+#include "vd_core.hxx"
 
 namespace vd::qt::string_rules
 {
@@ -25,16 +28,19 @@ requires qstring_matcher<Matcher>
 struct qstring_match {
     enum class mode { include, exclude };
     mode match_mode = mode::include;
+    std::string_view check_description = "string check failed";
 
     constexpr qstring_match() = default;
-    constexpr qstring_match(mode m) : match_mode(m)
-    {
-    }
+    constexpr qstring_match(mode m) : match_mode(m) {}
+    constexpr qstring_match(mode m, std::string_view desc) : match_mode(m), check_description(desc) {}
 
-    bool operator()(QStringView s) const
+    vd::result operator()(QStringView s) const
     {
         bool match = Matcher(s);
-        return match_mode == mode::include ? match : !match;
+        bool passes = (match_mode == mode::include) ? match : !match;
+        if(passes)
+            return vd::result::ok();
+        return vd::result::failed({ std::string(check_description) });
     }
 };
 
@@ -45,7 +51,7 @@ struct qregex_checker {
     QString pattern;
     mode match_mode = mode::include;
 
-    bool operator()(QStringView s) const;
+    vd::result operator()(QStringView s) const;
 };
 } // namespace vd::qt::string_rules
 
@@ -65,11 +71,31 @@ bool qregex(QStringView s, const QString& pattern);
 
 namespace vd::qt::string_rules
 {
-qstring_match<detail::empty_string> empty();
-qstring_match<detail::non_empty_string> non_empty();
-qstring_match<detail::empty_or_whitespace_string> empty_or_whitespace();
-qstring_match<detail::email_like> email_like();
-qstring_match<detail::uri_like> uri_like();
+inline qstring_match<detail::empty_string> empty()
+{
+    return { qstring_match<detail::empty_string>::mode::include, "string must be empty" };
+}
+
+inline qstring_match<detail::non_empty_string> non_empty()
+{
+    return { qstring_match<detail::non_empty_string>::mode::include, "string must be non-empty" };
+}
+
+inline qstring_match<detail::empty_or_whitespace_string> empty_or_whitespace()
+{
+    return { qstring_match<detail::empty_or_whitespace_string>::mode::include, "string must be empty or whitespace-only" };
+}
+
+inline qstring_match<detail::email_like> email_like()
+{
+    return { qstring_match<detail::email_like>::mode::include, "string does not look like an email address" };
+}
+
+inline qstring_match<detail::uri_like> uri_like()
+{
+    return { qstring_match<detail::uri_like>::mode::include, "string does not look like a URI" };
+}
+
 qregex_checker regex(QString pattern);
 } // namespace vd::qt::string_rules
 

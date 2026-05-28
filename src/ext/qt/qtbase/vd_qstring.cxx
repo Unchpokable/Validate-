@@ -50,42 +50,23 @@ bool qregex(QStringView s, const QString& pattern)
         vd::require(false, "Invalid regex pattern: {}", pattern.toStdString());
         return false;
     }
-    QRegularExpressionMatch m = re.match(s);
+    QRegularExpressionMatch m = re.matchView(s);
     return m.hasMatch() && m.capturedStart() == 0 && m.capturedLength() == s.size();
 }
 } // namespace vd::qt::string_rules::detail
 
 namespace vd::qt::string_rules
 {
-bool qregex_checker::operator()(QStringView s) const
+vd::result qregex_checker::operator()(QStringView s) const
 {
     bool matched = detail::qregex(s, pattern);
-    return match_mode == mode::include ? matched : !matched;
-}
-
-qstring_match<detail::empty_string> empty()
-{
-    return { qstring_match<detail::empty_string>::mode::include };
-}
-
-qstring_match<detail::non_empty_string> non_empty()
-{
-    return { qstring_match<detail::non_empty_string>::mode::include };
-}
-
-qstring_match<detail::empty_or_whitespace_string> empty_or_whitespace()
-{
-    return { qstring_match<detail::empty_or_whitespace_string>::mode::include };
-}
-
-qstring_match<detail::email_like> email_like()
-{
-    return { qstring_match<detail::email_like>::mode::include };
-}
-
-qstring_match<detail::uri_like> uri_like()
-{
-    return { qstring_match<detail::uri_like>::mode::include };
+    bool passes = (match_mode == mode::include) ? matched : !matched;
+    if(passes)
+        return vd::result::ok();
+    if(match_mode == mode::include)
+        return vd::result::failed({ "string does not match required pattern" });
+    else
+        return vd::result::failed({ "string matches excluded pattern" });
 }
 
 qregex_checker regex(QString pattern)

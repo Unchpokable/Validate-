@@ -46,7 +46,7 @@ void require(bool condition, details::assert_format<std::type_identity_t<Args>..
 }
 
 template<auto OnFailed, typename... Args>
-requires std::invocable<decltype(OnFailed), std::string>
+requires std::invocable<decltype(OnFailed), std::string_view>
 void require_callback(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
@@ -77,7 +77,7 @@ void required(bool condition, details::assert_format<std::type_identity_t<Args>.
 
 /// same as require_callback() but working only in debug builds
 template<auto OnFailed, typename... Args>
-requires std::invocable<decltype(OnFailed), std::string>
+requires std::invocable<decltype(OnFailed), std::string_view>
 void require_callbackd(bool condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
