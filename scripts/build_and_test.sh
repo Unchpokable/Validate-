@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # ============================================================
 #   Validate! - Build and Test Runner  (Bash / Linux / macOS)
-#   Usage: ./scripts/build_and_test.sh [Debug|Release] [QtDir]
+#   Usage: ./scripts/build_and_test.sh [--verbose] [Debug|Release] [QtDir]
+#
+#   --verbose  Print full test output. Without this flag only
+#              per-suite status lines and the final summary are
+#              shown.
 #
 #   QtDir  Optional path to Qt installation directory.
 #          Overrides the QTDIR environment variable.
@@ -25,12 +29,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_ROOT"
 
+# ── Parse arguments (--verbose may appear anywhere) ───────────
+VERBOSE=false
+POSITIONAL=()
+for _arg in "$@"; do
+    case "$_arg" in
+        --verbose|-verbose) VERBOSE=true ;;
+        *) POSITIONAL+=("$_arg") ;;
+    esac
+done
+
 BUILD_DIR="build"
-BUILD_CONFIG="${1:-Debug}"
+BUILD_CONFIG="${POSITIONAL[0]:-Debug}"
 
 # ── Resolve Qt directory ──────────────────────────────────────
 # Priority: explicit second argument > QTDIR env var
-EFFECTIVE_QT_DIR="${2:-}"
+EFFECTIVE_QT_DIR="${POSITIONAL[1]:-}"
 if [ -z "$EFFECTIVE_QT_DIR" ] && [ -n "${QTDIR:-}" ]; then
     EFFECTIVE_QT_DIR="$QTDIR"
 fi
@@ -68,7 +82,7 @@ if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
         CMAKE_ARGS+=("-DVD_EXTENSION_QT_BASE=ON")
         # Pass VD_QT_DIR only when an explicit argument was given;
         # otherwise cmake picks up QTDIR from the environment on its own.
-        if [ -n "${2:-}" ]; then
+        if [ -n "${POSITIONAL[1]:-}" ]; then
             CMAKE_ARGS+=("-DVD_QT_DIR=$EFFECTIVE_QT_DIR")
         fi
         echo "        Qt Base extension: ON"
@@ -149,13 +163,16 @@ if [ ${#SUITE_BINS[@]} -eq 0 ]; then
     exit 1
 fi
 
-step "3/3" "Running test suites (${#SUITE_BINS[@]} found)..."
+VERBOSE_LABEL=""
+$VERBOSE && VERBOSE_LABEL=" [verbose]"
+step "3/3" "Running test suites (${#SUITE_BINS[@]} found)...$VERBOSE_LABEL"
 echo ""
 
 declare -a SUITE_NAMES=()
 declare -a SUITE_PASSED=()
 declare -a SUITE_FAILED=()
 declare -a SUITE_STATUS=()
+declare -a SUITE_ELAPSED=()
 
 TOTAL_PASSED=0
 TOTAL_FAILED=0
@@ -164,26 +181,41 @@ for EXE in "${SUITE_BINS[@]}"; do
     SUITE="$(basename "$EXE" .exe)"
     SUITE="${SUITE##*/}"
 
-    pad_len=$(( 52 - ${#SUITE} ))
-    pad=$(printf '%*s' "$pad_len" '' | tr ' ' '-')
-    echo -e "  ${CYAN}-- Suite: $SUITE $pad${NC}"
-    echo ""
+    if $VERBOSE; then
+        pad_len=$(( 52 - ${#SUITE} ))
+        pad=$(printf '%*s' "$pad_len" '' | tr ' ' '-')
+        echo -e "  ${CYAN}-- Suite: $SUITE $pad${NC}"
+        echo ""
+    fi
 
     if [ ! -x "$EXE" ]; then
-        echo -e "  ${RED}[ERROR] Not executable: $EXE${NC}"
-        SUITE_NAMES+=("$SUITE"); SUITE_PASSED+=(0); SUITE_FAILED+=(0); SUITE_STATUS+=("MISSING")
-        echo ""
+        if $VERBOSE; then
+            echo -e "  ${RED}[ERROR] Not executable: $EXE${NC}"
+            echo ""
+        else
+            printf "  %-44s  ${RED}[MISSING]${NC}\n" "$SUITE"
+        fi
+        SUITE_NAMES+=("$SUITE"); SUITE_PASSED+=(0); SUITE_FAILED+=(0)
+        SUITE_STATUS+=("MISSING"); SUITE_ELAPSED+=(0)
         continue
     fi
 
     SUITE_OUT="$(mktemp)"
+    START_T=$(date +%s)
 
     set +e
-    "$EXE" --gtest_color=yes 2>&1 | tee "$SUITE_OUT" | sed 's/^/  /'
-    EXE_EXIT="${PIPESTATUS[0]}"
+    if $VERBOSE; then
+        "$EXE" --gtest_color=yes 2>&1 | tee "$SUITE_OUT" | sed 's/^/  /'
+        EXE_EXIT="${PIPESTATUS[0]}"
+        echo ""
+    else
+        printf "  %-44s  " "$SUITE"
+        "$EXE" --gtest_color=no > "$SUITE_OUT" 2>&1
+        EXE_EXIT=$?
+    fi
     set -u
 
-    echo ""
+    ELAPSED=$(( $(date +%s) - START_T ))
 
     SUITE_P=$(grep '  PASSED  ] ' "$SUITE_OUT" 2>/dev/null \
         | sed 's/.*PASSED  ] \([0-9][0-9]*\).*/\1/' | head -1)
@@ -207,10 +239,26 @@ for EXE in "${SUITE_BINS[@]}"; do
         STATUS="FAIL"
     fi
 
+    if $VERBOSE; then
+        if [ "$STATUS" = "PASS" ]; then
+            echo -e "  ${GREEN}[PASS]${NC}  ${ELAPSED}s  ($SUITE_P passed)"
+        else
+            echo -e "  ${RED}[FAIL]${NC}  ${ELAPSED}s  ($SUITE_P passed, $SUITE_F failed)"
+        fi
+        echo ""
+    else
+        if [ "$STATUS" = "PASS" ]; then
+            printf "${GREEN}[PASS]${NC}  %ds  (%s passed)\n" "$ELAPSED" "$SUITE_P"
+        else
+            printf "${RED}[FAIL]${NC}  %ds  (%s passed, %s failed)\n" "$ELAPSED" "$SUITE_P" "$SUITE_F"
+        fi
+    fi
+
     SUITE_NAMES+=("$SUITE")
     SUITE_PASSED+=("$SUITE_P")
     SUITE_FAILED+=("$SUITE_F")
     SUITE_STATUS+=("$STATUS")
+    SUITE_ELAPSED+=("$ELAPSED")
 
     TOTAL_PASSED=$(( TOTAL_PASSED + SUITE_P ))
     TOTAL_FAILED=$(( TOTAL_FAILED + SUITE_F ))
@@ -220,14 +268,15 @@ done
 banner "FINAL SUMMARY"
 echo ""
 
-printf "  %-26s  %8s  %8s  %s\n" "Suite" "Passed" "Failed" "Status"
-printf "  %s\n" "------------------------------------------------------------"
+printf "  %-26s  %8s  %8s  %8s  %s\n" "Suite" "Passed" "Failed" "Time" "Status"
+printf "  %s\n" "-----------------------------------------------------------------------"
 
 for i in "${!SUITE_NAMES[@]}"; do
     NAME="${SUITE_NAMES[$i]}"
     P="${SUITE_PASSED[$i]}"
     F="${SUITE_FAILED[$i]}"
     S="${SUITE_STATUS[$i]}"
+    T="${SUITE_ELAPSED[$i]}"
 
     case "$S" in
         PASS)    COLOR="$GREEN"  ;;
@@ -235,10 +284,10 @@ for i in "${!SUITE_NAMES[@]}"; do
         *)       COLOR="$RED"    ;;
     esac
 
-    printf "${COLOR}  %-26s  %8s  %8s  %s${NC}\n" "$NAME" "$P" "$F" "$S"
+    printf "${COLOR}  %-26s  %8s  %8s  %7ss  %s${NC}\n" "$NAME" "$P" "$F" "$T" "$S"
 done
 
-printf "  %s\n" "------------------------------------------------------------"
+printf "  %s\n" "-----------------------------------------------------------------------"
 
 TOTAL_COLOR="$GREEN"
 [ "$TOTAL_FAILED" -gt 0 ] && TOTAL_COLOR="$RED"

@@ -3,7 +3,11 @@ SETLOCAL ENABLEEXTENSIONS DISABLEDELAYEDEXPANSION
 
 :: ============================================================
 ::   Validate! - Build and Test Runner  (Windows Batch)
-::   Usage: scripts\build_and_test.bat [Debug|Release] [QtDir]
+::   Usage: scripts\build_and_test.bat [Debug|Release] [QtDir] [-verbose]
+::
+::   -verbose  Print full test output. Without this flag only
+::             per-suite status lines and the final summary are
+::             shown.
 ::
 ::   QtDir  Optional path to Qt installation directory.
 ::          Overrides the QTDIR environment variable.
@@ -18,6 +22,13 @@ IF "%BUILD_CONFIG%"=="" SET "BUILD_CONFIG=Debug"
 :: Resolve Qt directory: explicit arg > QTDIR env var
 SET "EFFECTIVE_QT_DIR=%~2"
 IF "%EFFECTIVE_QT_DIR%"=="" IF NOT "%QTDIR%"=="" SET "EFFECTIVE_QT_DIR=%QTDIR%"
+
+:: Scan all arguments for -verbose flag
+SET VERBOSE=0
+FOR %%A IN (%*) DO (
+    IF /I "%%A"=="-verbose"  SET VERBOSE=1
+    IF /I "%%A"=="--verbose" SET VERBOSE=1
+)
 
 SET "SCRIPT_DIR=%~dp0"
 PUSHD "%SCRIPT_DIR%.."
@@ -97,11 +108,12 @@ IF NOT "%QT_BIN_DIR%"=="" IF EXIST "%QT_BIN_DIR%" (
 )
 
 :: ── Step 3: Run tests ─────────────────────────────────────────
-echo [3/3] Running test suites...
+IF %VERBOSE%==1 (
+    echo [3/3] Running test suites... [verbose]
+) ELSE (
+    echo [3/3] Running test suites...
+)
 echo.
-echo  ------------------------------------------------------------
-echo    Test Suites
-echo  ------------------------------------------------------------
 
 IF NOT EXIST "%BIN_DIR%" (
     echo  [WARN] Binary directory not found: %BIN_DIR%
@@ -147,30 +159,86 @@ SET "EXE=%BIN_DIR%\%SUITE%.exe"
 SET "OUT=%TEMP%\vd_%SUITE%.txt"
 SET /A SUITE_COUNT+=1
 
-echo.
-echo  [Suite %SUITE_COUNT%] %SUITE%
-echo  . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
-
 IF NOT EXIST "%EXE%" (
-    echo  [ERROR] Binary not found: %EXE%
-    echo  Hint: check that config '%BUILD_CONFIG%' was built successfully.
+    IF %VERBOSE%==1 (
+        echo.
+        echo  [Suite %SUITE_COUNT%] %SUITE%
+        echo  . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+        echo  [ERROR] Binary not found: %EXE%
+    ) ELSE (
+        echo   %SUITE%  [MISSING]
+    )
     GOTO :EOF
 )
 
+IF %VERBOSE%==1 (
+    echo.
+    echo  [Suite %SUITE_COUNT%] %SUITE%
+    echo  . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+    echo.
+)
+
+:: Record start time in centiseconds since midnight
+CALL :TIME_CS T_START
+
 "%EXE%" --gtest_color=no > "%OUT%" 2>&1
-TYPE "%OUT%"
+SET EXE_EXIT=%ERRORLEVEL%
 
-:: Extract passed count from summary line: "[  PASSED  ] N tests."
-FOR /F "tokens=4" %%N IN ('FINDSTR /C:"  PASSED  ] " "%OUT%" 2^>NUL') DO SET /A TOTAL_PASSED+=%%N
+:: Record end time and compute elapsed
+CALL :TIME_CS T_END
+SET /A ELAPSED_CS=T_END - T_START
+IF %ELAPSED_CS% LSS 0 SET /A ELAPSED_CS+=8640000
+SET /A ELAPSED_S=ELAPSED_CS / 100
 
-:: Extract failed count from line: "[  FAILED  ] N tests, listed below:"
-FOR /F "tokens=4" %%N IN ('FINDSTR /C:"  FAILED  ] " "%OUT%" 2^>NUL ^| FINDSTR /C:" listed below"') DO SET /A TOTAL_FAILED+=%%N
+IF %VERBOSE%==1 (
+    TYPE "%OUT%"
+    echo.
+)
 
-:: Collect individual failed test names (summary lines have no " ms)" timing)
+:: Extract suite-level pass/fail counts
+SET "SUITE_P=0"
+FOR /F "tokens=4" %%N IN ('FINDSTR /C:"  PASSED  ] " "%OUT%" 2^>NUL') DO SET "SUITE_P=%%N"
+
+SET "SUITE_F=0"
+FOR /F "tokens=4" %%N IN ('FINDSTR /C:"  FAILED  ] " "%OUT%" 2^>NUL ^| FINDSTR /C:" listed below"') DO SET "SUITE_F=%%N"
+
+SET /A TOTAL_PASSED+=SUITE_P
+SET /A TOTAL_FAILED+=SUITE_F
+
+:: Collect individual failed test names
 FINDSTR /C:"  FAILED  ] " "%OUT%" 2>NUL ^
     | FINDSTR /V /C:" listed below" ^
     | FINDSTR /V /C:" ms)" ^
     >> "%FAILURES_FILE%" 2>NUL
 
+:: Print result line
+IF %EXE_EXIT%==0 (
+    IF %VERBOSE%==1 (
+        echo   [PASS]  %ELAPSED_S%s  (%SUITE_P% passed^)
+        echo.
+    ) ELSE (
+        echo   %SUITE%  [PASS]  %ELAPSED_S%s  (%SUITE_P% passed^)
+    )
+) ELSE (
+    IF %VERBOSE%==1 (
+        echo   [FAIL]  %ELAPSED_S%s  (%SUITE_P% passed, %SUITE_F% failed^)
+        echo.
+    ) ELSE (
+        echo   %SUITE%  [FAIL]  %ELAPSED_S%s  (%SUITE_P% passed, %SUITE_F% failed^)
+    )
+)
+
 IF EXIST "%OUT%" DEL /Q "%OUT%"
+GOTO :EOF
+
+:: ============================================================
+:: Parse %time% into centiseconds since midnight.
+:: Usage: CALL :TIME_CS <varname>
+:TIME_CS
+SET "_T=%time: =0%"
+SET "_HH=%_T:~0,2%"
+SET "_MM=%_T:~3,2%"
+SET "_SS=%_T:~6,2%"
+SET "_CC=%_T:~9,2%"
+SET /A "%1=(%_HH%*360000)+(%_MM%*6000)+(%_SS%*100)+%_CC%"
 GOTO :EOF

@@ -11,16 +11,21 @@
     Overrides the QTDIR environment variable.  When either QtDir or QTDIR is
     set, the script enables VD_EXTENSION_QT_BASE and adds Qt DLLs to PATH.
     If neither is set, Qt extension tests are skipped (not built).
+.PARAMETER Verbose
+    Print full test output. Without this flag only per-suite status lines
+    and the final summary are shown.
 .EXAMPLE
     .\scripts\build_and_test.ps1
     .\scripts\build_and_test.ps1 -Config Release
     .\scripts\build_and_test.ps1 -Reconfigure
     .\scripts\build_and_test.ps1 -QtDir "C:\Qt\6.9.2\msvc2022_64"
+    .\scripts\build_and_test.ps1 -Verbose
 #>
 param(
     [string]$Config = "Debug",
     [switch]$Reconfigure,
-    [string]$QtDir = ""
+    [string]$QtDir = "",
+    [switch]$Verbose
 )
 
 $ErrorActionPreference = "Stop"
@@ -135,7 +140,8 @@ if ($suites.Count -eq 0) {
 }
 
 # ── Step 3: Run tests ──────────────────────────────────────────────────────────
-Write-Step "3/3" "Running test suites ($($suites.Count) found)..."
+$verboseLabel = if ($Verbose) { " [verbose]" } else { "" }
+Write-Step "3/3" "Running test suites ($($suites.Count) found)...$verboseLabel"
 Write-Host ""
 
 $results = [System.Collections.Generic.List[hashtable]]::new()
@@ -143,29 +149,49 @@ $results = [System.Collections.Generic.List[hashtable]]::new()
 foreach ($suite in $suites) {
     $exe = Join-Path $binDir "$suite.exe"
 
-    $pad = "-" * [Math]::Max(2, 52 - $suite.Length)
-    Write-Host "  " -NoNewline
-    Write-Host "-- Suite: $suite $pad" -ForegroundColor Cyan
-    Write-Host ""
+    if ($Verbose) {
+        $pad = "-" * [Math]::Max(2, 52 - $suite.Length)
+        Write-Host "  " -NoNewline
+        Write-Host "-- Suite: $suite $pad" -ForegroundColor Cyan
+        Write-Host ""
+    }
 
     if (-not (Test-Path $exe)) {
-        Write-Host "  [ERROR] Binary not found: $exe" -ForegroundColor Red
-        Write-Host "          Check that config '$Config' was built successfully." -ForegroundColor DarkGray
-        $results.Add(@{ Suite = $suite; Passed = 0; Failed = 0; Status = "MISSING"; FailedTests = @() })
-        Write-Host ""
+        if ($Verbose) {
+            Write-Host "  [ERROR] Binary not found: $exe" -ForegroundColor Red
+            Write-Host "          Check that config '$Config' was built successfully." -ForegroundColor DarkGray
+            Write-Host ""
+        } else {
+            Write-Host ("  {0,-44}  " -f $suite) -NoNewline
+            Write-Host "[MISSING]" -ForegroundColor Yellow
+        }
+        $results.Add(@{ Suite = $suite; Passed = 0; Failed = 0; Status = "MISSING"; Elapsed = 0; FailedTests = @() })
         continue
     }
 
     $outputLines = [System.Collections.Generic.List[string]]::new()
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
 
-    & $exe --gtest_color=yes 2>&1 | ForEach-Object {
-        $text = if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { [string]$_ }
-        Write-Host "  $text"
-        $outputLines.Add($text)
+    if ($Verbose) {
+        & $exe --gtest_color=yes 2>&1 | ForEach-Object {
+            $text = if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { [string]$_ }
+            Write-Host "  $text"
+            $outputLines.Add($text)
+        }
+        $exeExit = $LASTEXITCODE
+        Write-Host ""
+    } else {
+        Write-Host ("  {0,-44}  " -f $suite) -NoNewline
+        $rawOutput = & $exe --gtest_color=no 2>&1
+        $exeExit = $LASTEXITCODE
+        foreach ($line in $rawOutput) {
+            $text = if ($line -is [System.Management.Automation.ErrorRecord]) { $line.ToString() } else { [string]$line }
+            $outputLines.Add($text)
+        }
     }
-    $exeExit = $LASTEXITCODE
 
-    Write-Host ""
+    $sw.Stop()
+    $elapsed = [Math]::Round($sw.Elapsed.TotalSeconds, 2)
 
     $passed      = 0
     $failed      = 0
@@ -184,12 +210,26 @@ foreach ($suite in $suites) {
     }
 
     $status = if ($failed -eq 0 -and $exeExit -eq 0) { "PASS" } else { "FAIL" }
+    $statusColor = if ($status -eq "PASS") { "Green" } else { "Red" }
+
+    if ($Verbose) {
+        $detail = if ($status -eq "PASS") { "($passed passed)" } else { "($passed passed, $failed failed)" }
+        Write-Host "  " -NoNewline
+        Write-Host "[$status]" -ForegroundColor $statusColor -NoNewline
+        Write-Host "  ${elapsed}s  $detail"
+        Write-Host ""
+    } else {
+        $detail = if ($status -eq "PASS") { "($passed passed)" } else { "($passed passed, $failed failed)" }
+        Write-Host "[$status]" -ForegroundColor $statusColor -NoNewline
+        Write-Host "  ${elapsed}s  $detail"
+    }
 
     $results.Add(@{
         Suite       = $suite
         Passed      = $passed
         Failed      = $failed
         Status      = $status
+        Elapsed     = $elapsed
         FailedTests = $failedTests.ToArray()
     })
 }
@@ -202,9 +242,9 @@ $totalPassed    = 0
 $totalFailed    = 0
 $allFailedTests = [System.Collections.Generic.List[string]]::new()
 
-$hdr = "  {0,-26} {1,8}   {2,8}   {3}"
-Write-Host ($hdr -f "Suite", "Passed", "Failed", "Status") -ForegroundColor White
-Write-Host ("  " + ("-" * 56))
+$hdr = "  {0,-26} {1,8}   {2,8}   {3,8}   {4}"
+Write-Host ($hdr -f "Suite", "Passed", "Failed", "Time", "Status") -ForegroundColor White
+Write-Host ("  " + ("-" * 64))
 
 foreach ($r in $results) {
     $totalPassed += $r.Passed
@@ -218,12 +258,12 @@ foreach ($r in $results) {
         "MISSING" { "Yellow" }
         default   { "Red"    }
     }
-    Write-Host ($hdr -f $r.Suite, $r.Passed, $r.Failed, $r.Status) -ForegroundColor $color
+    Write-Host ($hdr -f $r.Suite, $r.Passed, $r.Failed, "$($r.Elapsed)s", $r.Status) -ForegroundColor $color
 }
 
-Write-Host ("  " + ("-" * 56))
+Write-Host ("  " + ("-" * 64))
 $totalColor = if ($totalFailed -eq 0) { "Green" } else { "Red" }
-Write-Host ($hdr -f "TOTAL", $totalPassed, $totalFailed, "") -ForegroundColor $totalColor
+Write-Host ($hdr -f "TOTAL", $totalPassed, $totalFailed, "", "") -ForegroundColor $totalColor
 
 if ($allFailedTests.Count -gt 0) {
     Write-Host ""
