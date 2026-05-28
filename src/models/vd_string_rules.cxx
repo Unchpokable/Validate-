@@ -8,10 +8,16 @@ namespace vd::string_rules::detail
 
 namespace vd::string_rules
 {
-bool regex_checker::operator()(std::string_view s) const
+vd::result regex_checker::operator()(std::string_view s) const
 {
     bool matched = std::regex_match(std::string(s), pattern);
-    return match_mode == mode::include ? matched : !matched;
+    bool passes = (match_mode == mode::include) ? matched : !matched;
+    if(passes)
+        return vd::result::ok();
+    if(match_mode == mode::include)
+        return vd::result::failed({ "string does not match required pattern" });
+    else
+        return vd::result::failed({ "string matches excluded pattern" });
 }
 
 regex_checker regex(std::string_view pattern)

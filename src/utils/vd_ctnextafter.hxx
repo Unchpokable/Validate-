@@ -8,6 +8,9 @@
 #include <cstdint>
 #include <limits>
 
+static_assert(std::numeric_limits<float>::is_iec559, "ct_nextafter: requires IEEE 754 binary32 float");
+static_assert(std::numeric_limits<double>::is_iec559, "ct_nextafter: requires IEEE 754 binary64 double");
+
 namespace vd
 {
 
@@ -93,20 +96,6 @@ constexpr T ct_nextafter_fp(T from, T to) noexcept
         ord = going_up ? ord + 1ull : ord - 1ull;
         return std::bit_cast<T>(fp_from_ordered(ord));
     }
-#if defined(__SIZEOF_INT128__)
-    else if constexpr(sizeof(T) == 16) {
-        // Handles __float128 (true 128-bit IEEE 754 quad-precision).
-        //
-        // Does NOT correctly handle 80-bit long double in a 16-byte container (GCC/x86 ABI):
-        // its sign bit is at position 79 (not 127), and bytes 10–15 are padding whose
-        // content is unspecified — the ordered transform would act on wrong bits.
-        using U128 = unsigned __int128;
-        auto bits = std::bit_cast<U128>(from);
-        auto ord = fp_to_ordered(bits);
-        ord = going_up ? ord + U128(1) : ord - U128(1);
-        return std::bit_cast<T>(fp_from_ordered(ord));
-    }
-#endif
     else {
         // sizeof(T) == 0 is always false but is type-dependent, so this static_assert
         // only fires when this else branch is actually instantiated (unsupported T).

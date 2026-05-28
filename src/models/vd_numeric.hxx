@@ -4,6 +4,7 @@
 #define VD_NUMERIC_HXX
 
 #include <limits>
+#include <string>
 #include <type_traits>
 
 #include "utils/vd_ctnextafter.hxx"
@@ -32,10 +33,21 @@ public:
     {
     }
 
-    constexpr bool operator()(const T& value) const
+    vd::result operator()(const T& value) const
     {
-        bool result = value >= min && value <= max;
-        return inverse_condition ? !result : result;
+        bool in_range = value >= min && value <= max;
+        bool passes = inverse_condition ? !in_range : in_range;
+        if(passes)
+            return vd::result::ok();
+
+        if(!inverse_condition) {
+            return vd::result::failed(
+                { "value " + std::to_string(value) + " is not in range [" + std::to_string(min) + ", " + std::to_string(max) + "]" });
+        }
+        else {
+            return vd::result::failed({ "value " + std::to_string(value) + " falls within excluded range [" + std::to_string(min) + ", "
+                                        + std::to_string(max) + "]" });
+        }
     }
 
     /// [min, max]

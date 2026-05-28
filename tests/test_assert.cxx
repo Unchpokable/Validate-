@@ -53,7 +53,16 @@ TEST(RequireExceptionTest, FalseConditionThrows)
 TEST(RequireExceptionTest, ThrowsCorrectExceptionType)
 {
     EXPECT_THROW(vd::require<std::logic_error>(false, "logic"), std::logic_error);
-    EXPECT_NO_THROW([]{ try { vd::require<std::logic_error>(false, "x"); } catch (const std::runtime_error&) { throw; } catch (...) {} }());
+    EXPECT_NO_THROW([] {
+        try {
+            vd::require<std::logic_error>(false, "x");
+        }
+        catch(const std::runtime_error&) {
+            throw;
+        }
+        catch(...) {
+        }
+    }());
 }
 
 TEST(RequireExceptionTest, ExceptionMessageMatchesFormat)
@@ -61,7 +70,8 @@ TEST(RequireExceptionTest, ExceptionMessageMatchesFormat)
     try {
         vd::require<std::runtime_error>(false, "val={} str={}", 7, "hi");
         FAIL() << "expected std::runtime_error";
-    } catch (const std::runtime_error& e) {
+    }
+    catch(const std::runtime_error& e) {
         EXPECT_STREQ(e.what(), "val=7 str=hi");
     }
 }
@@ -71,7 +81,8 @@ TEST(RequireExceptionTest, ExceptionMessageNoArgs)
     try {
         vd::require<std::runtime_error>(false, "plain message");
         FAIL() << "expected std::runtime_error";
-    } catch (const std::runtime_error& e) {
+    }
+    catch(const std::runtime_error& e) {
         EXPECT_STREQ(e.what(), "plain message");
     }
 }
@@ -80,14 +91,20 @@ TEST(RequireExceptionTest, WorksWithCustomException)
 {
     struct MyError : std::exception {
         std::string msg;
-        explicit MyError(std::string s) : msg(std::move(s)) {}
-        const char* what() const noexcept override { return msg.c_str(); }
+        explicit MyError(std::string s) : msg(std::move(s))
+        {
+        }
+        const char* what() const noexcept override
+        {
+            return msg.c_str();
+        }
     };
 
     try {
         vd::require<MyError>(false, "custom={}", 99);
         FAIL() << "expected MyError";
-    } catch (const MyError& e) {
+    }
+    catch(const MyError& e) {
         EXPECT_STREQ(e.what(), "custom=99");
     }
 }
@@ -102,10 +119,10 @@ TEST(RequireExceptionTest, CaughtAsBaseStdException)
 static bool s_called = false;
 static std::string s_msg;
 
-void on_fail(std::string msg)
+void on_fail(std::string_view msg)
 {
     s_called = true;
-    s_msg = std::move(msg);
+    s_msg = std::move(std::string(msg.data(), msg.size()));
 }
 
 class RequireCallbackTest : public ::testing::Test {

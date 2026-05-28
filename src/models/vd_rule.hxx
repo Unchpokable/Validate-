@@ -7,6 +7,8 @@
 #include <functional>
 #include <type_traits>
 
+#include "core/vd_result.hxx"
+
 namespace vd
 {
 
@@ -49,10 +51,11 @@ concept value_checker = std::invocable<Checker, V> && std::convertible_to<std::i
 
 template<typename T>
 struct rule {
+    using rule_fn = std::function<vd::result(const T&)>;
+
     template<typename Fn>
-    requires (!std::same_as<std::remove_cvref_t<Fn>, rule>)
-          && std::invocable<Fn, const T&>
-          && std::convertible_to<std::invoke_result_t<Fn, const T&>, bool>
+    requires(!std::same_as<std::remove_cvref_t<Fn>, rule>)
+            && std::invocable<Fn, const T&> && std::convertible_to<std::invoke_result_t<Fn, const T&>, bool>
     explicit rule(Fn&& fn) : m_predicate(std::forward<Fn>(fn))
     {
     }
@@ -62,17 +65,18 @@ struct rule {
     rule& operator=(const rule&) = default;
     rule& operator=(rule&&) = default;
 
-    bool operator()(const T& obj) const
+    vd::result operator()(const T& obj) const
     {
         return m_predicate(obj);
     }
-    bool operator()(const T* obj) const
+
+    vd::result operator()(const T* obj) const
     {
         return m_predicate(*obj);
     }
 
 private:
-    std::function<bool(const T&)> m_predicate;
+    rule_fn m_predicate;
 };
 } // namespace vd
 
