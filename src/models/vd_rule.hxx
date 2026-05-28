@@ -7,6 +7,8 @@
 #include <functional>
 #include <type_traits>
 
+#include "assert/vd_assert.hxx"
+
 #include "core/vd_result.hxx"
 
 namespace vd
@@ -72,6 +74,7 @@ struct rule {
 
     vd::result operator()(const T* obj) const
     {
+        vd::require(obj != nullptr, "Can not apply rule to null pointer!");
         return m_predicate(*obj);
     }
 

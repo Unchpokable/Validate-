@@ -27,7 +27,7 @@ std::string vd::result::format() const
 
 void vd::result::with_other(const vd::result& other)
 {
-    if(*this != other) {
+    if(this != &other) {
         is_valid = is_valid && other.is_valid;
         failed_rules.insert(failed_rules.end(), other.failed_rules.begin(), other.failed_rules.end());
     }
