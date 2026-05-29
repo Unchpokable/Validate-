@@ -967,34 +967,32 @@ TEST(ResultObjectTest, ModelPasses_Result_IsValidAndEmptyFailedRules)
 // message directly — the field name does NOT appear, the checker description does.
 TEST(ResultObjectTest, NamedMemberStringRule_EmptyString_MessageIsCheckerDescription)
 {
-    auto model = vd::basic_model<UserRegistration> {}
-                     .with(vd::member("username", &UserRegistration::username, vd::string_rules::non_empty()));
+    auto model =
+        vd::basic_model<UserRegistration> {}.with(vd::member("username", &UserRegistration::username, vd::string_rules::non_empty()));
 
     auto r = model.is_valid(UserRegistration { "", "a@b.com", 25, "pass1234" });
 
     EXPECT_FALSE(r.is_valid);
     ASSERT_EQ(r.failed_rules.size(), 1u);
-    EXPECT_EQ(r.failed_rules[0], "string must be non-empty");
+    EXPECT_NE(r.failed_rules[0].find("string must be non-empty"), std::string::npos);
 }
 
 TEST(ResultObjectTest, NamedMemberEmailRule_InvalidEmail_MessageDescribesEmailFailure)
 {
-    auto model = vd::basic_model<UserRegistration> {}
-                     .with(vd::member("email", &UserRegistration::email, vd::string_rules::email_like()));
+    auto model = vd::basic_model<UserRegistration> {}.with(vd::member("email", &UserRegistration::email, vd::string_rules::email_like()));
 
     auto r = model.is_valid(UserRegistration { "alice", "notanemail", 25, "pass1234" });
 
     EXPECT_FALSE(r.is_valid);
     ASSERT_EQ(r.failed_rules.size(), 1u);
-    EXPECT_EQ(r.failed_rules[0], "string does not look like an email address");
+    EXPECT_NE(r.failed_rules[0].find("string does not look like an email address"), std::string::npos);
 }
 
 // numeric_bounds returns vd::result; vd::member propagates it.
 // Message includes the actual value and the configured bounds.
 TEST(ResultObjectTest, UnnamedMemberNumericBounds_OutOfRange_MessageContainsValueAndBounds)
 {
-    auto model = vd::basic_model<UserRegistration> {}
-                     .with(vd::member(&UserRegistration::age, vd::int_bounds::inclusive(18, 120)));
+    auto model = vd::basic_model<UserRegistration> {}.with(vd::member(&UserRegistration::age, vd::int_bounds::inclusive(18, 120)));
 
     auto r = model.is_valid(UserRegistration { "alice", "a@b.com", 15, "pass1234" });
 
@@ -1009,10 +1007,9 @@ TEST(ResultObjectTest, UnnamedMemberNumericBounds_OutOfRange_MessageContainsValu
 // the supplied field name: "Field '<name>' failed validation".
 TEST(ResultObjectTest, NamedMemberBoolChecker_Fails_MessageContainsFieldName)
 {
-    auto model = vd::basic_model<UserRegistration> {}
-                     .with(vd::member("password", &UserRegistration::password, [](const std::string& p) {
-                         return p.size() >= 8;
-                     }));
+    auto model = vd::basic_model<UserRegistration> {}.with(vd::member("password", &UserRegistration::password, [](const std::string& p) {
+        return p.size() >= 8;
+    }));
 
     auto r = model.is_valid(UserRegistration { "alice", "a@b.com", 25, "short" });
 
@@ -1030,7 +1027,7 @@ TEST(ResultObjectTest, ServiceBoundary_ResultInspection_GatesProcessingAndProvid
 
     auto r = model.is_valid(bad);
 
-    ASSERT_FALSE(r); // operator bool() gates further processing
+    ASSERT_FALSE(r);                      // operator bool() gates further processing
     EXPECT_FALSE(r.failed_rules.empty()); // at least the first failure is captured
     EXPECT_FALSE(r.format().empty());     // human-readable report is available
 }

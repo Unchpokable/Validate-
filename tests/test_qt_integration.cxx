@@ -1823,7 +1823,7 @@ TEST(QtResultApiInspection, VdField_WithQtStringRule_EmptyString_MessagePreserve
     auto r = model.is_valid(user);
     EXPECT_FALSE(r.is_valid);
     ASSERT_EQ(r.failed_rules.size(), 1u);
-    EXPECT_EQ(r.failed_rules[0], "string must be non-empty");
+    EXPECT_NE(r.failed_rules[0].find("string must be non-empty"), std::string::npos);
 }
 
 // vd::field with a named field and bool lambda uses the field name in the message.

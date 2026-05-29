@@ -1,4 +1,9 @@
+#include "models/vd_numeric.hxx"
+#include "gtest/gtest.h"
 #include <gtest/gtest.h>
+#include <limits>
+
+#define VD_EXPORT_UNSAFE
 #include <vd.hxx>
 
 // ---------------------------------------------------------------------------
@@ -134,6 +139,56 @@ TEST(NumericBoundsTest, IntegerLessThanStepsByOne)
     EXPECT_FALSE(bounds(6));
     EXPECT_TRUE(bounds(4));
     EXPECT_TRUE(bounds(std::numeric_limits<int32_t>::min()));
+}
+
+TEST(NumericBoundsTest, IntegerAlwaysFinite)
+{
+    auto rule = vd::numeric::finite<int>();
+
+    EXPECT_TRUE(rule(static_cast<int>(5)));
+    EXPECT_TRUE(rule(std::numeric_limits<int>::max()));
+    EXPECT_TRUE(rule(std::numeric_limits<int>::lowest()));
+
+    auto rule_unsigned = vd::numeric::finite<unsigned int>();
+
+    EXPECT_TRUE(rule(static_cast<unsigned int>(5)));
+    EXPECT_TRUE(rule(std::numeric_limits<unsigned int>::max()));
+    EXPECT_TRUE(rule(std::numeric_limits<unsigned int>::lowest()));
+}
+
+TEST(NumericBoundsTest, FloatsAndDoublesInfiniteFails)
+{
+    auto rule = vd::numeric::finite<float>();
+
+    EXPECT_FALSE(rule(std::numeric_limits<float>::infinity()));
+
+    auto rule_double = vd::numeric::finite<double>();
+
+    EXPECT_FALSE(rule(std::numeric_limits<double>::infinity()));
+}
+
+TEST(NumericBoundsTest, FloatsAndDoublesNaNFails)
+{
+    auto rule = vd::numeric::finite<float>();
+
+    EXPECT_FALSE(rule(std::numeric_limits<float>::quiet_NaN()));
+
+    auto rule_double = vd::numeric::finite<double>();
+
+    EXPECT_FALSE(rule_double(std::numeric_limits<double>::quiet_NaN()));
+}
+
+TEST(NumericBoundsTest, FiniteFloatsPassesOnBoundaries)
+{
+    auto rule = vd::numeric::finite<double>();
+
+    EXPECT_TRUE(rule(std::numeric_limits<double>::denorm_min()));
+    EXPECT_TRUE(rule(std::numeric_limits<double>::max()));
+
+    auto rule_float = vd::numeric::finite<float>();
+
+    EXPECT_TRUE(rule(std::numeric_limits<float>::denorm_min()));
+    EXPECT_TRUE(rule(std::numeric_limits<float>::max()));
 }
 
 // ---------------------------------------------------------------------------
@@ -896,4 +951,32 @@ TEST(ValidateManyConstPtrVectorTest, NullPointerInVectorReturnsFalse)
     const Point a { 1.0, 0.0 };
     std::vector<const Point*> ptrs { &a, nullptr };
     EXPECT_FALSE(vd::validate_many(model, ptrs));
+}
+
+// ----------------
+// Macro definition tests
+// ----------------
+TEST(MemberAndFieldMacros, MacroGeneratesValidChecker)
+{
+    auto model = vd::basic_model<Point>().with(VD_MEMBER(Point, x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    const Point a { 1.0, 0.0 };
+
+    EXPECT_TRUE(model.is_valid(a));
+}
+
+TEST(MemberAndFieldMacros, GeneratedFieldNameCorrect)
+{
+    auto model = vd::basic_model<Point>().with(VD_MEMBER(Point, x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    const Point a { -1.0, 0.0 };
+
+    auto verdict = model.is_valid(a);
+
+    EXPECT_FALSE(verdict.is_valid);
+    EXPECT_EQ(verdict.failed_rules.size(), 1);
+
+    auto contains_field_name = verdict.failed_rules[0];
+
+    EXPECT_NE(contains_field_name.find("x"), std::string::npos);
 }
