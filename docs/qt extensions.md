@@ -57,10 +57,17 @@ template<auto Matcher>
 struct qstring_match {
     enum class mode { include, exclude };
     mode match_mode = mode::include;
+    std::string_view check_description = "string check failed";
 
-    bool operator()(QStringView s) const;
+    constexpr qstring_match() = default;
+    constexpr qstring_match(mode m);
+    constexpr qstring_match(mode m, std::string_view description);
+
+    vd::result operator()(QStringView s) const;
 };
 ```
+
+Поле `check_description` передаётся в `vd::result::failed_rules` при провале. Фабричные функции задают осмысленное описание автоматически.
 
 Аналог `vd::string_rules::string_match<Matcher>`, но оперирует `QStringView` вместо `std::string_view`. Поскольку `const QString&` неявно конвертируется в `QStringView`, checker совместим с `vd::member` на полях типа `QString`:
 
@@ -148,7 +155,7 @@ struct qregex_checker {
     QString pattern;
     mode match_mode = mode::include;
 
-    bool operator()(QStringView s) const;
+    vd::result operator()(QStringView s) const;
 };
 ```
 
@@ -222,14 +229,14 @@ vd::rule<Widget> r([](const Widget& w) {
 
 ### Цепочка проверок внутри правила
 
-Правило возвращает `false` в следующих случаях (без abort, просто провал):
+Правило возвращает `vd::result` с ошибкой в следующих случаях (без abort, просто провал):
 
 | Ситуация | Поведение |
 |----------|-----------|
-| `T` не является `QObject` | `false` |
-| Свойство `prop_name` не существует | `false` |
-| Значение `QVariant` нельзя сконвертировать в `PropT` | `false` |
-| Checker возвращает `false` | `false` |
+| `T` не является `QObject` | `vd::result::failed({"Object is not a QObject"})` |
+| Свойство `prop_name` не существует | `vd::result::failed({"Property is not valid"})` |
+| Значение `QVariant` нельзя сконвертировать в `PropT` | `vd::result::failed({"Property cannot be converted to expected type"})` |
+| Checker возвращает провал | `vd::result::failed({...сообщение от checker-а...})` |
 
 Имя свойства сохраняется как `QByteArray` (UTF-8) внутри замыкания — конвертация из `QString` происходит один раз при создании правила, не при каждой проверке.
 

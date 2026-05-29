@@ -11,12 +11,12 @@
 Модуль строится на трёх уровнях:
 
 ```
-rule<T>          — единичное правило: const T& -> bool
-basic_model<T>   — набор правил + метод is_valid()
+rule<T>              — единичное правило: const T& -> vd::result
+basic_model<T>       — набор правил + метод is_valid()
 basic_bound_model<T> — модель, привязанная к конкретному объекту
 ```
 
-Правило (`rule<T>`) — это type-erased обёртка над предикатом. Все варианты задания правила (через указатель на член, через getter, через лямбду) сводятся к одному внутреннему `std::function<bool(const T&)>`.
+Правило (`rule<T>`) — это type-erased обёртка над предикатом. Все варианты задания правила (через указатель на член, через getter, через лямбду) сводятся к одному внутреннему `std::function<vd::result(const T&)>`.
 
 ---
 
@@ -26,12 +26,13 @@ basic_bound_model<T> — модель, привязанная к конкрет�
 
 ```cpp
 template<typename Fn>
-    requires std::invocable<Fn, const T&>
-          && std::convertible_to<std::invoke_result_t<Fn, const T&>, bool>
+    requires(!std::same_as<std::remove_cvref_t<Fn>, rule>)
+         && std::invocable<Fn, const T&>
+         && std::convertible_to<std::invoke_result_t<Fn, const T&>, bool>
 explicit rule(Fn&& fn);
 ```
 
-Принимает любой callable с сигнатурой `const T& -> bool` (или совместимой). Конструктор `explicit` — правила создаются через фабричные функции, а не неявным преобразованием.
+Принимает любой callable с сигнатурой `const T& -> bool` или `const T& -> vd::result` (поскольку `vd::result` конвертируется в `bool`). Конструктор `explicit` — правила создаются через фабричные функции, а не неявным преобразованием.
 
 ```cpp
 // Прямое создание (редко нужно вручную)
@@ -41,8 +42,8 @@ vd::rule<int> r([](const int& v) { return v > 0; });
 ### `operator()`
 
 ```cpp
-bool operator()(const T& obj) const;
-bool operator()(const T* obj) const;  // разыменовывает и вызывает reference-версию
+vd::result operator()(const T& obj) const;
+vd::result operator()(const T* obj) const;  // разыменовывает и вызывает reference-версию
 ```
 
 Оба перегруза существуют, чтобы `basic_model::is_valid(const T*)` мог вызвать правило через указатель без лишнего кода.
@@ -56,8 +57,14 @@ bool operator()(const T* obj) const;  // разыменовывает и выз�
 ### `vd::field` — getter-метод + checker
 
 ```cpp
+// С именем поля (используется в сообщениях об ошибках):
 template<typename MemberPtr, typename Checker>
-    requires std::is_member_function_pointer_v<...>
+    requires std::is_member_function_pointer_v<std::remove_cvref_t<MemberPtr>>
+auto field(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule<member_class_t<MemberPtr>>;
+
+// Без имени:
+template<typename MemberPtr, typename Checker>
+    requires std::is_member_function_pointer_v<std::remove_cvref_t<MemberPtr>>
 auto field(MemberPtr ptr, Checker checker) -> rule<member_class_t<MemberPtr>>;
 ```
 
@@ -68,7 +75,7 @@ struct Sensor {
     double get_temperature() const;
 };
 
-auto rule = vd::field(&Sensor::get_temperature, vd::double_bounds::less_than(100.0));
+auto rule = vd::field("temperature", &Sensor::get_temperature, vd::double_bounds::less_than(100.0));
 // T = Sensor выводится из типа &Sensor::get_temperature
 ```
 
@@ -77,8 +84,14 @@ auto rule = vd::field(&Sensor::get_temperature, vd::double_bounds::less_than(100
 ### `vd::member` — поле + checker
 
 ```cpp
+// С именем поля (используется в сообщениях об ошибках):
 template<typename MemberPtr, typename Checker>
-    requires std::is_member_object_pointer_v<...>
+    requires std::is_member_object_pointer_v<std::remove_cvref_t<MemberPtr>>
+auto member(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule<member_class_t<MemberPtr>>;
+
+// Без имени:
+template<typename MemberPtr, typename Checker>
+    requires std::is_member_object_pointer_v<std::remove_cvref_t<MemberPtr>>
 auto member(MemberPtr ptr, Checker checker) -> rule<member_class_t<MemberPtr>>;
 ```
 
@@ -87,11 +100,11 @@ auto member(MemberPtr ptr, Checker checker) -> rule<member_class_t<MemberPtr>>;
 ```cpp
 struct Point { double x, y; };
 
-auto rule = vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 100.0));
+auto rule = vd::member("x", &Point::x, vd::double_bounds::inclusive(0.0, 100.0));
 // T = Point выводится из типа &Point::x
 ```
 
-`vd::field` и `vd::member` намеренно разделены по имени, хотя реализация идентична. Различие в имени отражает намерение: *вычисленное значение* vs *хранимое поле*.
+`vd::field` и `vd::member` намеренно разделены по имени, хотя реализация идентична. Различие в имени отражает намерение: *вычисленное значение* vs *хранимое поле*. Указание `field_name` добавляет контекст в сообщение об ошибке при провале правила.
 
 ### `vd::predicate` — произвольная лямбда
 
@@ -164,11 +177,22 @@ model.with(rule1).with(rule2);  // возвращает basic_model&
 ### `is_valid()`
 
 ```cpp
-bool is_valid(const T& object) const;
-bool is_valid(const T* object) const;
+vd::result is_valid(const T& object) const;
+vd::result is_valid(const T* object) const;
 ```
 
-Проходит по всем правилам; возвращает `false`, как только первое правило не срабатывает. Пустая модель всегда возвращает `true`.
+Запускает **все** правила подряд и агрегирует результаты через `result::with_other()`. Не останавливается на первом провале — собирает сообщения от всех сработавших правил. Пустая модель возвращает `result::ok()`.
+
+Если `object == nullptr`, возвращает `result(false)` без запуска правил.
+
+### `die_if_failed()`
+
+```cpp
+void die_if_failed(const T& object) const;
+void die_if_failed(const T* object) const;
+```
+
+Вызывает `is_valid()` и, если результат не валиден, бросает `vd::validation_exception`.
 
 ### `add_rule()`
 
@@ -191,6 +215,15 @@ Point p{3.0, 4.0};
 auto bound = model.bind(p);
 bool ok = bound.is_valid();  // эквивалентно model.is_valid(p)
 ```
+
+### `is_valid()` / `die_if_failed()`
+
+```cpp
+vd::result is_valid() const;
+void die_if_failed() const;
+```
+
+Делегируют в `m_model.is_valid(m_object)` и `m_model.die_if_failed(m_object)` соответственно.
 
 ### Важное ограничение: non-owning ссылка
 
@@ -245,4 +278,33 @@ concept value_checker = std::invocable<Checker, V>
     && std::convertible_to<std::invoke_result_t<Checker, V>, bool>;
 ```
 
-Используется как концепт-документация. Любой тип, удовлетворяющий этому концепту, может быть передан вторым аргументом в `vd::field` / `vd::member`.
+Используется как концепт-документация. Любой тип, удовлетворяющий этому концепту, может быть передан вторым аргументом в `vd::field` / `vd::member`. Поскольку `vd::result` имеет `operator bool()`, checker-ы, возвращающие `vd::result`, тоже удовлетворяют этому концепту.
+
+---
+
+## Свободные функции `validate_many`
+
+Вспомогательные функции для валидации нескольких объектов сразу. Возвращают `bool` (не `vd::result`).
+
+```cpp
+// Произвольное число объектов одного типа (variadic):
+template<typename T, typename... Args>
+    requires(std::same_as<std::decay_t<Args>, T> && ...)
+bool validate_many(const basic_model<T>& model, Args&&... objects);
+
+// Вектор объектов по значению:
+template<typename T>
+bool validate_many(const basic_model<T>& model, const std::vector<T>& objects);
+
+// Вектор указателей (non-const):
+template<typename T>
+    requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
+bool validate_many(const basic_model<T>& model, const std::vector<T*>& object_ptrs);
+
+// Вектор указателей (const):
+template<typename T>
+    requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
+bool validate_many(const basic_model<T>& model, const std::vector<const T*>& object_ptrs);
+```
+
+Возвращает `true`, только если все объекты прошли валидацию.

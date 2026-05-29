@@ -20,21 +20,31 @@ struct numeric_bounds final {
     const T min;
     const T max;
 
-    bool operator()(const T& value) const;
+    vd::result operator()(const T& value) const;
 
-    static numeric_bounds<T> inclusive(T min, T max);
-    static numeric_bounds<T> exclusive(T min, T max);
-    static numeric_bounds<T> greater_than(T min);
-    static numeric_bounds<T> less_than(T max);
-    static numeric_bounds<T> unbounded();
+    static constexpr numeric_bounds<T> inclusive(T min, T max);
+    static constexpr numeric_bounds<T> exclusive(T min, T max);
+    static constexpr numeric_bounds<T> greater_than(T min);
+    static constexpr numeric_bounds<T> less_than(T max);
+    static constexpr numeric_bounds<T> unbounded();
+    static constexpr numeric_bounds<T> outside_inclusive(T lower_bound, T upper_bound);
+    static constexpr numeric_bounds<T> outside_exclusive(T lower_bound, T upper_bound);
 };
 ```
 
 ### Концепт `numeric_compatible`
 
 ```cpp
-concept numeric_compatible = (std::integral<T> || std::floating_point<T>)
-                           && std::is_arithmetic_v<T>;
+// Определён в src/utils/vd_ctnextafter.hxx:
+template<typename T>
+concept generic_numer = std::integral<T> || std::floating_point<T>;
+
+// Определён в src/models/vd_numeric.hxx:
+template<typename T>
+concept arithmetic = std::is_arithmetic_v<T>;
+
+template<typename T>
+concept numeric_compatible = generic_numer<T> && arithmetic<T>;
 ```
 
 Принимает: `int`, `double`, `float`, `uint8_t`, `int64_t` и т.д.  
@@ -49,18 +59,24 @@ concept numeric_compatible = (std::integral<T> || std::floating_point<T>)
 | `greater_than(min)` | `value > min` | `(5, +∞)` |
 | `less_than(max)` | `value < max` | `(-∞, 10)` |
 | `unbounded()` | всегда `true` | `(-∞, +∞)` |
+| `outside_inclusive(lo, hi)` | `value <= lo \|\| value >= hi` | вне `[lo, hi]` |
+| `outside_exclusive(lo, hi)` | `value < lo \|\| value > hi` | вне `(lo, hi)` |
 
 ### Реализация exclusive-границ
 
-`exclusive`, `greater_than` и `less_than` реализованы через `std::nextafter` — следующее представимое значение в направлении нужной границы:
+`exclusive`, `greater_than`, `less_than`, `outside_exclusive` реализованы через библиотечный `vd::ct_nextafter<T>` — `constexpr`-аналог `std::nextafter`, поддерживающий и целые числа, и числа с плавающей точкой:
 
 ```cpp
 // exclusive(0.0, 1.0) создаёт bounds с:
-min = std::nextafter(0.0, std::numeric_limits<double>::max());    // 0.0 + epsilon
-max = std::nextafter(1.0, std::numeric_limits<double>::lowest()); // 1.0 - epsilon
+min = ct_nextafter(0.0, std::numeric_limits<double>::max());    // 0.0 + epsilon
+max = ct_nextafter(1.0, std::numeric_limits<double>::lowest()); // 1.0 - epsilon
+
+// exclusive(0, 10) для int:
+min = ct_nextafter(0, std::numeric_limits<int>::max());  // 1
+max = ct_nextafter(10, std::numeric_limits<int>::min()); // 9
 ```
 
-Это работает корректно для `float` и `double`. Для **целочисленных типов** `std::nextafter` не определён, поэтому `exclusive` / `greater_than` / `less_than` на целых числах не будут компилироваться — используйте `inclusive` со сдвигом границы вручную.
+Это работает корректно как для `float`/`double`, так и для целочисленных типов.
 
 ---
 
@@ -111,6 +127,25 @@ using double_model = basic_model<double>;
 ```cpp
 vd::int_model age_model;
 age_model.with(vd::predicate([](const int& v) { return v > 0 && v < 150; }));
+```
+
+---
+
+## `vd::numeric::finite()`
+
+```cpp
+namespace vd::numeric {
+    template<numeric_compatible T>
+    vd::rule<T> finite();
+}
+```
+
+Возвращает правило, которое проверяет `std::isfinite(value)`. Применяется к полям с плавающей точкой, чтобы отфильтровать `NaN` и `inf`:
+
+```cpp
+auto model = vd::basic_model<Measurement>()
+    .with(vd::member(&Measurement::value, vd::double_bounds::greater_than(0.0)))
+    .with(vd::numeric::finite<double>());
 ```
 
 ---

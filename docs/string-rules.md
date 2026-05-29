@@ -9,7 +9,7 @@
 
 ## Назначение
 
-Модуль предоставляет checker-ы для строковых полей. Все checker-ы принимают `std::string_view` и возвращают `bool`, поэтому совместимы с `value_checker` концептом и работают с `vd::member` / `vd::field` при полях типа `std::string`.
+Модуль предоставляет checker-ы для строковых полей. Все checker-ы принимают `std::string_view` и возвращают `vd::result`, поэтому совместимы с `value_checker` концептом (который требует конвертируемости в `bool`) и работают с `vd::member` / `vd::field` при полях типа `std::string`.
 
 ```cpp
 auto model = vd::basic_model<User>()
@@ -27,11 +27,18 @@ template<auto Matcher>
     requires string_matcher<Matcher>
 struct string_match {
     enum class mode { include, exclude };
-    mode match_mode;
+    mode match_mode = mode::include;
+    std::string_view check_description = "string check failed";
 
-    bool operator()(std::string_view s) const;
+    constexpr string_match() = default;
+    constexpr string_match(mode m);
+    constexpr string_match(mode m, std::string_view description);
+
+    vd::result operator()(std::string_view s) const;
 };
 ```
+
+Поле `check_description` используется как текст ошибки в `vd::result::failed_rules`, когда правило не срабатывает. Фабричные функции (`empty()`, `non_empty()` и т.д.) передают осмысленное описание автоматически.
 
 ### Параметр шаблона `Matcher`
 
@@ -129,17 +136,17 @@ string_match<detail::uri_like> uri_like();
 struct regex_checker {
     enum class mode { include, exclude };
 
-    std::string pattern;
+    std::regex pattern;
     mode match_mode = mode::include;
 
-    bool operator()(std::string_view s) const;
+    vd::result operator()(std::string_view s) const;
 };
 ```
 
 ### Фабричная функция `regex()`
 
 ```cpp
-regex_checker regex(std::string pattern);
+regex_checker regex(std::string_view pattern);
 ```
 
 Создаёт checker, который проверяет строку через `std::regex_match` (т.е. паттерн должен совпасть со **всей** строкой, а не с подстрокой).
@@ -161,7 +168,7 @@ auto model = vd::basic_model<Form>()
 
 ```cpp
 auto bad = vd::string_rules::regex("[invalid");
-bad("anything");  // -> abort: "Invalid regex pattern: [invalid"
+bad("anything");  // -> abort: "Invalid regex pattern: [invalid. Error code: N"
 ```
 
 ---
@@ -182,19 +189,22 @@ vd::member(&User::email, vd::string_rules::email_like())
 
 ## Написание собственного string checker-а
 
-Любой callable `std::string_view -> bool` является валидным `value_checker` для строковых полей:
+Любой callable `std::string_view -> bool` (или `-> vd::result`) является валидным `value_checker` для строковых полей:
 
 ```cpp
-// Через лямбду
+// Через лямбду (возврат bool)
 auto starts_with_http = [](std::string_view s) {
     return s.starts_with("http");
 };
 vd::member(&Config::base_url, starts_with_http)
 
-// Через структуру
+// Через структуру с детализированной ошибкой (возврат vd::result)
 struct min_length {
     std::size_t n;
-    bool operator()(std::string_view s) const { return s.size() >= n; }
+    vd::result operator()(std::string_view s) const {
+        if(s.size() >= n) return vd::result::ok();
+        return vd::result::failed({std::format("string must be at least {} chars", n)});
+    }
 };
 vd::member(&Post::body, min_length{10})
 ```

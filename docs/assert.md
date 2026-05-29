@@ -38,11 +38,14 @@ Function: void foo()
 
 ### `vd::require<exception>`
 ```cpp
-template<typename Exception, typename... Args>
+template<typename ExceptionType, typename... Args>
+    requires std::derived_from<ExceptionType, std::exception>
 void vd::require(bool condition, format_string fmt, Args&&... args);
 ```
 
-Если `condition == false` - форматирует сообщение через `std::format`, бросает исключение `Exception`, передавая форматированное сообщение в качестве `what()` сообщения исключения.
+Если `condition == false` — форматирует сообщение через `std::format` и бросает `ExceptionType`, конструируя его из отформатированной строки (передаётся в конструктор как `std::string`). Это означает, что `what()` исключения будет содержать именно текст сообщения — без строки, файла и функции (в отличие от abort-версии).
+
+`ExceptionType` обязан наследоваться от `std::exception` и принимать `std::string` в конструктор.
 
 ```cpp
 vd::require<std::logic_error>(ptr != nullptr, "Expected non-null pointer in {}", __func__);
@@ -51,20 +54,17 @@ vd::require<std::runtime_error>(true, "This never fires");
 ```
 
 **Вывод при ошибке:**
-Аналогично `vd::require`:
 ```
-Assertion failed: Expected non-null pointer in foo
-File: src/foo.cpp
-Line: 42
-Function: void foo()
+// exception.what() == "Expected non-null pointer in foo"
 ```
-Но вместо stderr текст выводится в качестве текста исключения.
+
+Никакого вывода в `stderr`. Место вызова (`source_location`) захватывается, но в тексте исключения не используется.
 
 ### `vd::require_callback`
 
 ```cpp
 template<auto OnFailed, typename... Args>
-    requires std::invocable<decltype(OnFailed), std::string>
+    requires std::invocable<decltype(OnFailed), std::string_view>
 void vd::require_callback(bool condition, format_string fmt, Args&&... args);
 ```
 
@@ -76,7 +76,7 @@ void my_logger(std::string msg) { std::cerr << "[ERROR] " << msg << "\n"; }
 vd::require_callback<my_logger>(value > 0, "Bad value: {}", value);
 ```
 
-`OnFailed` — шаблонный не-типовой параметр, поэтому callback разрешается в compile time без накладных расходов на `std::function`.
+`OnFailed` — шаблонный не-типовой параметр, поэтому callback разрешается в compile time без накладных расходов на `std::function`. Callback получает `std::string_view` на отформатированное сообщение.
 
 ## Внутреннее устройство
 
@@ -98,3 +98,20 @@ void require(bool condition,
 ### `assert_fail`
 
 `[[noreturn]]` функция, которая форматирует и печатает сообщение в `stderr`, затем вызывает `std::abort()`. Вынесена отдельно, чтобы снизить размер кода при инстанцировании `require` с разными наборами Args.
+
+### `Debug` перегрузки
+
+У каждой из функций `require`, `require<>`, `require_callback` существуют Debug-перегрузки `required`, `required<>`, `require_callbackd`, работающие только в сборках без объявленного символа `_NDEBUG` (с подчёркиванием, не `NDEBUG`).
+
+```cpp
+#ifndef _NDEBUG
+// debug-only реализации
+void required(bool condition, format_string fmt, Args&&... args);
+template<typename ExceptionType, ...> void required(...);
+template<auto OnFailed, ...> void require_callbackd(...);
+#else
+// пустые no-op заглушки
+#endif
+```
+
+Они не отличаются по механике работы от обычных функций внутри debug-сборок, но удаляются в release. В release-версии `require_callbackd` имеет ограничение `std::invocable<decltype(OnFailed), std::string>` (а не `std::string_view` как в debug) — это известная несогласованность в коде; заглушка всё равно ничего не вызывает.
