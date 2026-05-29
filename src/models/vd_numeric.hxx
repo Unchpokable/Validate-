@@ -3,22 +3,23 @@
 #ifndef VD_NUMERIC_HXX
 #define VD_NUMERIC_HXX
 
+#include <format>
 #include <limits>
-#include <string>
 #include <type_traits>
 
 #include "utils/vd_ctnextafter.hxx"
-#include "vd_basic_model.hxx"
+
+#include "models/vd_basic_model.hxx"
 
 namespace vd
 {
-// vd::numeric is provided by vd_ctnextafter.hxx
+// vd::generic_numer is provided by vd_ctnextafter.hxx
 
 template<typename T>
 concept arithmetic = std::is_arithmetic_v<T>;
 
 template<typename T>
-concept numeric_compatible = numeric<T> && arithmetic<T>;
+concept numeric_compatible = generic_numer<T> && arithmetic<T>;
 
 template<numeric_compatible T>
 struct numeric_bounds final {
@@ -37,16 +38,16 @@ public:
     {
         bool in_range = value >= min && value <= max;
         bool passes = inverse_condition ? !in_range : in_range;
-        if(passes)
+
+        if(passes) {
             return vd::result::ok();
+        }
 
         if(!inverse_condition) {
-            return vd::result::failed(
-                { "value " + std::to_string(value) + " is not in range [" + std::to_string(min) + ", " + std::to_string(max) + "]" });
+            return vd::result::failed({ std::format("value {} is not in range [{}, {}]", value, min, max) });
         }
         else {
-            return vd::result::failed({ "value " + std::to_string(value) + " falls within excluded range [" + std::to_string(min) + ", "
-                                        + std::to_string(max) + "]" });
+            return vd::result::failed({ std::format("value {} falls within excluded range [{}, {}]", value, min, max) });
         }
     }
 
@@ -121,5 +122,16 @@ using unsigned_short_model = basic_model<std::uint16_t>;
 using unsigned_int_model = basic_model<std::uint32_t>;
 using unsigned_long_model = basic_model<std::uint64_t>;
 } // namespace vd
+
+namespace vd::numeric
+{
+template<numeric_compatible T>
+vd::rule<T> finite()
+{
+    return vd::rule<T>([](const T& value) {
+        return std::isfinite(value);
+    });
+}
+} // namespace vd::numeric
 
 #endif // VD_NUMERIC_HXX

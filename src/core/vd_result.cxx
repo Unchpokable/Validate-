@@ -25,6 +25,17 @@ std::string vd::result::format() const
     return std::format("Result fail report: \n{}", ss.str());
 }
 
+std::string vd::result::short_format() const
+{
+    std::stringstream ss;
+
+    for(auto msg : failed_rules) {
+        ss << std::format("{}, ", msg);
+    }
+
+    return ss.str();
+}
+
 void vd::result::with_other(const vd::result& other)
 {
     if(this != &other) {

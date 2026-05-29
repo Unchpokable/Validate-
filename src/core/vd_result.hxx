@@ -16,7 +16,17 @@ struct result {
 
     result(bool valid, std::vector<std::string> failed_rules);
 
+    // @brief Prints a multiline detailed report
+    // following format:
+    // Result Fail Report:\n
+    // [#1] Field X should be in range [-10, 10]\n
+    // [#2] Field Y string should not be empty\n
     std::string format() const;
+
+    // @brief Prints a short singleline message
+    // following format:
+    // Field X should be in range [-10, 10], Field Y string should not be empty
+    std::string short_format() const;
 
     void with_other(const result& other);
 

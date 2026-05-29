@@ -7,4 +7,8 @@
 #include "core/vd_exception.hxx"
 #include "core/vd_result.hxx"
 
+#if defined(VD_EXPORT_UNSAFE)
+#include "core/vd_macro.hxx"
+#endif
+
 #endif

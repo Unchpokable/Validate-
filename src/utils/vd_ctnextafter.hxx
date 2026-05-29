@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <limits>
 
+#include "core/vd_always_false.hxx"
+
 static_assert(std::numeric_limits<float>::is_iec559, "ct_nextafter: requires IEEE 754 binary32 float");
 static_assert(std::numeric_limits<double>::is_iec559, "ct_nextafter: requires IEEE 754 binary64 double");
 
@@ -97,14 +99,11 @@ constexpr T ct_nextafter_fp(T from, T to) noexcept
         return std::bit_cast<T>(fp_from_ordered(ord));
     }
     else {
-        // sizeof(T) == 0 is always false but is type-dependent, so this static_assert
-        // only fires when this else branch is actually instantiated (unsupported T).
-        static_assert(sizeof(T) == 0,
+        static_assert(vd::always_false_v<T>,
             "ct_nextafter: unsupported floating-point type size; "
             "supported sizes are 4 bytes (float) and 8 bytes (double, "
             "long double on MSVC / ARM). "
-            "On GCC/x86, __float128 is supported when __SIZEOF_INT128__ is defined; "
-            "80-bit long double in a 16-byte container is not supported.");
+            "80-bit long double in a 16-byte container and 16-byte float128 is not supported yet.");
         return from; // unreachable — satisfies the return-type requirement
     }
 }
@@ -112,9 +111,9 @@ constexpr T ct_nextafter_fp(T from, T to) noexcept
 } // namespace detail
 
 template<typename T>
-concept numeric = std::integral<T> || std::floating_point<T>;
+concept generic_numer = std::integral<T> || std::floating_point<T>;
 
-template<numeric T>
+template<generic_numer T>
 [[nodiscard]] constexpr T ct_nextafter(T from, T to) noexcept
 {
     if constexpr(std::integral<T>)

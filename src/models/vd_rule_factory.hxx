@@ -31,7 +31,7 @@ auto field(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule<
         if constexpr(std::same_as<checker_return, vd::result>) {
             vd::result r = checker(val);
             if(!r) {
-                return vd::result::failed(r.failed_rules);
+                return vd::result::failed({ std::format("Field {} failed: {}", field_name, r.short_format()) });
             }
             return vd::result::ok();
         }
@@ -68,7 +68,7 @@ auto member(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule
         if constexpr(std::same_as<checker_return, vd::result>) {
             vd::result r = checker(val);
             if(!r) {
-                return vd::result::failed(r.failed_rules);
+                return vd::result::failed({ std::format("Field {} failed: {}", field_name, r.short_format()) });
             }
             return vd::result::ok();
         }
