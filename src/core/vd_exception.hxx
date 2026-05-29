@@ -1,3 +1,5 @@
+#pragma once
+
 #ifndef VD_EXCEPTION_HXX
 #define VD_EXCEPTION_HXX
 
