@@ -128,8 +128,14 @@ namespace vd::numeric
 template<numeric_compatible T>
 vd::rule<T> finite()
 {
-    return vd::rule<T>([](const T& value) {
-        return std::isfinite(value);
+    return vd::rule<T>([](const T& value) -> vd::result {
+        auto is_finite = std::isfinite(value);
+
+        if(is_finite) {
+            return vd::result::ok();
+        }
+
+        return vd::result::failed({ "Value if not finite: {}", value });
     });
 }
 } // namespace vd::numeric
