@@ -9,8 +9,8 @@
 namespace vd
 {
 struct result {
-    bool is_valid;
-    std::vector<std::string> failed_rules;
+    bool is_valid { true };
+    std::vector<std::string> failed_rules {};
 
     result(bool valid);
 
@@ -29,6 +29,9 @@ struct result {
     std::string short_format() const;
 
     void with_other(const result& other);
+
+    result& also(const result& other) &;
+    result also(const result& other) &&;
 
     void die_if_failed() const;
 

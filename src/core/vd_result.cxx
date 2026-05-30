@@ -44,6 +44,18 @@ void vd::result::with_other(const vd::result& other)
     }
 }
 
+vd::result& vd::result::also(const result& other) &
+{
+    this->with_other(other);
+    return *this;
+}
+
+vd::result vd::result::also(const result& other) &&
+{
+    this->with_other(other);
+    return std::move(*this);
+}
+
 void vd::result::die_if_failed() const
 {
     vd::require<vd::validation_exception>(is_valid, "Validation failed:\n{}", format());
