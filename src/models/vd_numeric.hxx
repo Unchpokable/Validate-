@@ -23,8 +23,8 @@ concept numeric_compatible = generic_numer<T> && arithmetic<T>;
 
 template<numeric_compatible T>
 struct numeric_bounds final {
-    const T min;
-    const T max;
+    T min;
+    T max;
 
 private:
     bool inverse_condition { false };

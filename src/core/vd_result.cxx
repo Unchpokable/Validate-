@@ -17,9 +17,9 @@ std::string vd::result::format() const
 {
     std::stringstream ss;
 
-    std::int32_t counter;
-    for(auto msg : failed_rules) {
-        ss << std::format("[#{}] Fail reason: {}\n", counter, msg);
+    std::int32_t counter { 0 };
+    for(const auto& msg : failed_rules) {
+        ss << std::format("[#{}] Fail reason: {}\n", counter++, msg);
     }
 
     return std::format("Result fail report: \n{}", ss.str());
@@ -29,7 +29,7 @@ std::string vd::result::short_format() const
 {
     std::stringstream ss;
 
-    for(auto msg : failed_rules) {
+    for(const auto& msg : failed_rules) {
         ss << std::format("{}, ", msg);
     }
 

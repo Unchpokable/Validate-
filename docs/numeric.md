@@ -148,6 +148,8 @@ auto model = vd::basic_model<Measurement>()
     .with(vd::numeric::finite<double>());
 ```
 
+Правило `std::isfinite(const T& value)` всегда `true`, если тип `T` является целочисленным.
+
 ---
 
 ## Добавление нового числового checker-а

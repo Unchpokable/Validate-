@@ -28,7 +28,7 @@ requires qstring_matcher<Matcher>
 struct qstring_match {
     enum class mode { include, exclude };
     mode match_mode = mode::include;
-    std::string_view check_description = "string check failed";
+    std::string check_description = "string check failed";
 
     constexpr qstring_match() = default;
     constexpr qstring_match(mode m) : match_mode(m)
