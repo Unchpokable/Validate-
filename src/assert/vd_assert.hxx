@@ -26,10 +26,17 @@ struct assert_format {
 [[noreturn]] void assert_fail(std::string_view message, const std::source_location& loc);
 } // namespace vd::details
 
+namespace vd::detail
+{
+template<typename T>
+concept contextually_bool = requires(T&& t) {
+    { static_cast<T&&>(t) ? 0 : 0 };
+};
+} // namespace vd::detail
+
 namespace vd
 {
-template<typename Cond, typename... Args>
-requires std::convertible_to<Cond, bool>
+template<detail::contextually_bool Cond, typename... Args>
 void require(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
@@ -37,8 +44,8 @@ void require(Cond&& condition, details::assert_format<std::type_identity_t<Args>
     }
 }
 
-template<typename ExceptionType, typename Cond, typename... Args>
-requires std::derived_from<ExceptionType, std::exception> && std::convertible_to<Cond, bool>
+template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
+requires std::derived_from<ExceptionType, std::exception>
 void require(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
@@ -46,8 +53,8 @@ void require(Cond&& condition, details::assert_format<std::type_identity_t<Args>
     }
 }
 
-template<auto OnFailed, typename Cond, typename... Args>
-requires std::invocable<decltype(OnFailed), std::string_view> && std::convertible_to<Cond, bool>
+template<auto OnFailed, detail::contextually_bool Cond, typename... Args>
+requires std::invocable<decltype(OnFailed), std::string_view>
 void require_callback(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
@@ -58,8 +65,7 @@ void require_callback(Cond&& condition, details::assert_format<std::type_identit
 #if not defined(_NDEBUG) || not defined(NDEBUG)
 
 /// same as require() but working only in debug builds
-template<typename Cond, typename... Args>
-requires std::convertible_to<Cond, bool>
+template<detail::contextually_bool Cond, typename... Args>
 void required(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
@@ -68,8 +74,8 @@ void required(Cond&& condition, details::assert_format<std::type_identity_t<Args
 }
 
 /// same as require() but working only in debug builds
-template<typename ExceptionType, typename Cond, typename... Args>
-requires std::derived_from<ExceptionType, std::exception> && std::convertible_to<Cond, bool>
+template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
+requires std::derived_from<ExceptionType, std::exception>
 void required(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
@@ -78,7 +84,7 @@ void required(Cond&& condition, details::assert_format<std::type_identity_t<Args
 }
 
 /// same as require_callback() but working only in debug builds
-template<auto OnFailed, typename Cond, typename... Args>
+template<auto OnFailed, detail::contextually_bool Cond, typename... Args>
 requires std::invocable<decltype(OnFailed), std::string_view>
 void require_callbackd(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
@@ -90,21 +96,20 @@ void require_callbackd(Cond&& condition, details::assert_format<std::type_identi
 #else
 
 /// same as require() but working only in debug builds
-template<typename Cond, typename... Args>
-requires std::convertible_to<Cond, bool>
+template<detail::contextually_bool Cond, typename... Args>
 void required(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
 }
 
 /// same as require() but working only in debug builds
-template<typename ExceptionType, typename Cond, typename... Args>
-requires std::derived_from<ExceptionType, std::exception> && std::convertible_to<Cond, bool>
+template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
+requires std::derived_from<ExceptionType, std::exception>
 void required(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
 }
 
 /// same as require_callback() but working only in debug builds
-template<auto OnFailed, typename Cond, typename... Args>
+template<auto OnFailed, detail::contextually_bool Cond, typename... Args>
 requires std::invocable<decltype(OnFailed), std::string_view>
 void require_callbackd(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {

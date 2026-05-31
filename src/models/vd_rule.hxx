@@ -47,7 +47,9 @@ struct first_arg_of<R (C::*)(Arg, Rest...) const noexcept> {
 
 // Checker concept: any callable V -> bool-convertible.
 template<typename Checker, typename V>
-concept value_checker = std::invocable<Checker, V> && std::convertible_to<std::invoke_result_t<Checker, V>, vd::result>;
+concept value_checker =
+    std::invocable<Checker, V>
+    && (std::convertible_to<std::invoke_result_t<Checker, V>, vd::result> || std::convertible_to<std::invoke_result_t<Checker, V>, bool>);
 
 // ---------------------------------------------------------------------------
 

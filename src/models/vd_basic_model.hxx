@@ -170,14 +170,14 @@ template<typename T, typename... Args>
 requires(std::same_as<std::decay_t<Args>, T> && ...)
 bool validate_many(const basic_model<T>& model, Args&&... objects)
 {
-    return (model.is_valid(objects) && ...);
+    return (model.is_valid(objects).is_valid && ...);
 }
 
 template<typename T>
 bool validate_many(const basic_model<T>& model, const std::vector<T>& objects)
 {
     return std::ranges::all_of(objects, [&model](const T& obj) {
-        return model.is_valid(obj);
+        return model.is_valid(obj).is_valid;
     });
 }
 
@@ -186,7 +186,7 @@ requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
 bool validate_many(const basic_model<T>& model, const std::vector<T*>& object_ptrs)
 {
     return std::ranges::all_of(object_ptrs, [&model](const T* obj) {
-        return model.is_valid(obj);
+        return model.is_valid(obj).is_valid;
     });
 }
 
@@ -195,7 +195,7 @@ requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
 bool validate_many(const basic_model<T>& model, const std::vector<const T*>& object_ptrs)
 {
     return std::ranges::all_of(object_ptrs, [&model](const T* obj) {
-        return model.is_valid(obj);
+        return model.is_valid(obj).is_valid;
     });
 }
 } // namespace vd
