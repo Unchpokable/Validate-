@@ -131,7 +131,6 @@ struct basic_bound_model {
 private:
     basic_bound_model(const model_type& model, const_pointer_type object) : m_model(model), m_object(object)
     {
-        vd::require(object != nullptr, "Object pointer cannot be null");
     }
 
     const model_type& m_model;
