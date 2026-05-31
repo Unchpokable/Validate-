@@ -1,10 +1,10 @@
 #pragma once
 
-#include <concepts>
 #ifndef VD_BASIC_MODEL_HXX
 #define VD_BASIC_MODEL_HXX
 
 #include <algorithm>
+#include <concepts>
 #include <type_traits>
 #include <vector>
 
