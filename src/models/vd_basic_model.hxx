@@ -48,17 +48,20 @@ struct basic_model {
         die_if_failed(std::addressof(object));
     }
 
-    basic_bound_model<T> bind(const_pointer_type object) const
+    basic_bound_model<T> bind(const_pointer_type object) const&
     {
         vd::require(object != nullptr, "Binding to nullptr objects is not allowed!");
 
         return basic_bound_model<T>::bind(*this, object);
     }
 
-    basic_bound_model<T> bind(const_reference_type object) const
+    basic_bound_model<T> bind(const_reference_type object) const&
     {
         return bind(std::addressof(object));
     }
+
+    basic_bound_model<T> bind(const_pointer_type) const&& = delete;
+    basic_bound_model<T> bind(const_reference_type) const&& = delete;
 
     void add_rule(vd::rule<T> rule)
     {
@@ -79,13 +82,19 @@ struct basic_model {
 
     basic_model& with(const basic_model& other) &
     {
-        m_rules.insert(m_rules.end(), other.m_rules.begin(), other.m_rules.end());
+        if(this != &other) {
+            m_rules.insert(m_rules.end(), other.m_rules.begin(), other.m_rules.end());
+        }
+
         return *this;
     }
 
     basic_model with(const basic_model& other) &&
     {
-        m_rules.insert(m_rules.end(), other.m_rules.begin(), other.m_rules.end());
+        if(this != &other) {
+            m_rules.insert(m_rules.end(), other.m_rules.begin(), other.m_rules.end());
+        }
+
         return std::move(*this);
     }
 

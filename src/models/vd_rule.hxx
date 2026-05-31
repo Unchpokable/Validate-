@@ -47,7 +47,7 @@ struct first_arg_of<R (C::*)(Arg, Rest...) const noexcept> {
 
 // Checker concept: any callable V -> bool-convertible.
 template<typename Checker, typename V>
-concept value_checker = std::invocable<Checker, V> && std::convertible_to<std::invoke_result_t<Checker, V>, bool>;
+concept value_checker = std::invocable<Checker, V> && std::convertible_to<std::invoke_result_t<Checker, V>, vd::result>;
 
 // ---------------------------------------------------------------------------
 
@@ -57,7 +57,7 @@ struct rule {
 
     template<typename Fn>
     requires(!std::same_as<std::remove_cvref_t<Fn>, rule>)
-            && std::invocable<Fn, const T&> && std::convertible_to<std::invoke_result_t<Fn, const T&>, bool>
+            && std::invocable<Fn, const T&> && std::convertible_to<std::invoke_result_t<Fn, const T&>, vd::result>
     explicit rule(Fn&& fn) : m_predicate(std::forward<Fn>(fn))
     {
     }

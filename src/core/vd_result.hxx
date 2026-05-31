@@ -39,7 +39,7 @@ struct result {
 
     static result failed(std::vector<std::string> failed_rules);
 
-    operator bool() const;
+    explicit operator bool() const;
 };
 } // namespace vd
 

@@ -60,13 +60,13 @@ public:
     /// (min, max)
     static constexpr numeric_bounds<T> exclusive(T min, T max)
     {
-        return { vd::ct_nextafter(min, std::numeric_limits<T>::max()), vd::ct_nextafter(max, std::numeric_limits<T>::lowest()) };
+        return { vd::ct_nextafter(min, (std::numeric_limits<T>::max())), vd::ct_nextafter(max, std::numeric_limits<T>::lowest()) };
     }
 
     /// (min, +inf)
     static constexpr numeric_bounds<T> greater_than(T min)
     {
-        return { vd::ct_nextafter(min, std::numeric_limits<T>::max()), std::numeric_limits<T>::max() };
+        return { vd::ct_nextafter(min, (std::numeric_limits<T>::max())), (std::numeric_limits<T>::max()) };
     }
 
     /// (-inf, max)
@@ -135,7 +135,7 @@ vd::rule<T> finite()
             return vd::result::ok();
         }
 
-        return vd::result::failed({ "Value if not finite: {}", value });
+        return vd::result::failed({ std::format("Value if not finite: {}", value) });
     });
 }
 } // namespace vd::numeric

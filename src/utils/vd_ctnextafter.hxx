@@ -111,7 +111,7 @@ constexpr T ct_nextafter_fp(T from, T to) noexcept
 } // namespace detail
 
 template<typename T>
-concept generic_numer = std::integral<T> || std::floating_point<T>;
+concept generic_numer = (std::integral<T> || std::floating_point<T>) && !std::same_as<T, bool>;
 
 template<generic_numer T>
 [[nodiscard]] constexpr T ct_nextafter(T from, T to) noexcept
