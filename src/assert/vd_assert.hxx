@@ -8,7 +8,7 @@
 #include <string_view>
 #include <type_traits>
 
-namespace vd::details
+namespace vd::detail
 {
 // Wraps a format string and captures source_location at the call site via its consteval ctor.
 // Args are deduced only from the trailing args..., not from this parameter (type_identity_t).
@@ -24,7 +24,7 @@ struct assert_format {
 };
 
 [[noreturn]] void assert_fail(std::string_view message, const std::source_location& loc);
-} // namespace vd::details
+} // namespace vd::detail
 
 namespace vd::detail
 {
@@ -37,16 +37,16 @@ concept contextually_bool = requires(T&& t) {
 namespace vd
 {
 template<detail::contextually_bool Cond, typename... Args>
-void require(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void require(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
-        details::assert_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc);
+        detail::assert_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc);
     }
 }
 
 template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
 requires std::derived_from<ExceptionType, std::exception>
-void require(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void require(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
         throw ExceptionType(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
@@ -55,7 +55,7 @@ void require(Cond&& condition, details::assert_format<std::type_identity_t<Args>
 
 template<auto OnFailed, detail::contextually_bool Cond, typename... Args>
 requires std::invocable<decltype(OnFailed), std::string_view>
-void require_callback(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void require_callback(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
         OnFailed(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
@@ -66,17 +66,17 @@ void require_callback(Cond&& condition, details::assert_format<std::type_identit
 
 /// same as require() but working only in debug builds
 template<detail::contextually_bool Cond, typename... Args>
-void required(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void required(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
-        details::assert_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc);
+        detail::assert_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc);
     }
 }
 
 /// same as require() but working only in debug builds
 template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
 requires std::derived_from<ExceptionType, std::exception>
-void required(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void required(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
         throw ExceptionType(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
@@ -86,7 +86,7 @@ void required(Cond&& condition, details::assert_format<std::type_identity_t<Args
 /// same as require_callback() but working only in debug builds
 template<auto OnFailed, detail::contextually_bool Cond, typename... Args>
 requires std::invocable<decltype(OnFailed), std::string_view>
-void require_callbackd(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void require_callbackd(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
         OnFailed(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
@@ -97,21 +97,21 @@ void require_callbackd(Cond&& condition, details::assert_format<std::type_identi
 
 /// same as require() but working only in debug builds
 template<detail::contextually_bool Cond, typename... Args>
-void required(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void required(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
 }
 
 /// same as require() but working only in debug builds
 template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
 requires std::derived_from<ExceptionType, std::exception>
-void required(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void required(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
 }
 
 /// same as require_callback() but working only in debug builds
 template<auto OnFailed, detail::contextually_bool Cond, typename... Args>
 requires std::invocable<decltype(OnFailed), std::string_view>
-void require_callbackd(Cond&& condition, details::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void require_callbackd(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
 }
 
