@@ -135,7 +135,7 @@ vd::rule<T> finite()
             return vd::result::ok();
         }
 
-        return vd::result::failed({ std::format("Value if not finite: {}", value) });
+        return vd::result::failed({ std::format("Value is not finite: {}", value) });
     });
 }
 } // namespace vd::numeric
