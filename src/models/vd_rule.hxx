@@ -7,8 +7,7 @@
 #include <functional>
 #include <type_traits>
 
-#include "assert/vd_assert.hxx"
-
+#include "core/vd_not_null.hxx"
 #include "core/vd_result.hxx"
 
 namespace vd
@@ -47,7 +46,9 @@ struct first_arg_of<R (C::*)(Arg, Rest...) const noexcept> {
 
 // Checker concept: any callable V -> bool-convertible.
 template<typename Checker, typename V>
-concept value_checker = std::invocable<Checker, V> && std::convertible_to<std::invoke_result_t<Checker, V>, bool>;
+concept value_checker =
+    std::invocable<Checker, V>
+    && (std::convertible_to<std::invoke_result_t<Checker, V>, vd::result> || std::convertible_to<std::invoke_result_t<Checker, V>, bool>);
 
 // ---------------------------------------------------------------------------
 
@@ -55,9 +56,12 @@ template<typename T>
 struct rule {
     using rule_fn = std::function<vd::result(const T&)>;
 
+    using const_pointer_type = std::add_pointer_t<std::add_const_t<T>>;
+    using const_reference_type = std::add_lvalue_reference_t<std::add_const_t<T>>;
+
     template<typename Fn>
     requires(!std::same_as<std::remove_cvref_t<Fn>, rule>)
-            && std::invocable<Fn, const T&> && std::convertible_to<std::invoke_result_t<Fn, const T&>, bool>
+            && std::invocable<Fn, const_reference_type> && std::convertible_to<std::invoke_result_t<Fn, const_reference_type>, vd::result>
     explicit rule(Fn&& fn) : m_predicate(std::forward<Fn>(fn))
     {
     }
@@ -67,14 +71,13 @@ struct rule {
     rule& operator=(const rule&) = default;
     rule& operator=(rule&&) = default;
 
-    vd::result operator()(const T& obj) const
+    vd::result operator()(const_reference_type obj) const
     {
         return m_predicate(obj);
     }
 
-    vd::result operator()(const T* obj) const
+    vd::result operator()(vd::not_null<const_pointer_type> obj) const
     {
-        vd::require(obj != nullptr, "Can not apply rule to null pointer!");
         return m_predicate(*obj);
     }
 

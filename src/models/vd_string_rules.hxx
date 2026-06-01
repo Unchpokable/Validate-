@@ -9,7 +9,8 @@
 #include <type_traits>
 
 #include "inline_deps/ctre.hpp"
-#include "vd_core.hxx"
+
+#include "core/vd_result.hxx"
 
 namespace vd::string_rules
 {
@@ -22,7 +23,7 @@ requires string_matcher<Matcher>
 struct string_match {
     enum class mode { include, exclude };
     mode match_mode = mode::include;
-    std::string_view check_description = "string check failed";
+    std::string check_description = "string check failed";
 
     constexpr string_match() = default;
     constexpr string_match(mode m) : match_mode(m)

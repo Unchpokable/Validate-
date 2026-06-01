@@ -1,10 +1,10 @@
 #pragma once
 
-#include <concepts>
 #ifndef VD_BASIC_MODEL_HXX
 #define VD_BASIC_MODEL_HXX
 
 #include <algorithm>
+#include <concepts>
 #include <type_traits>
 #include <vector>
 
@@ -13,6 +13,7 @@
 #include "assert/vd_assert.hxx"
 
 #include "core/vd_exception.hxx"
+#include "core/vd_not_null.hxx"
 #include "core/vd_result.hxx"
 
 namespace vd
@@ -31,16 +32,16 @@ struct basic_model {
     {
     }
 
-    vd::result is_valid(const_pointer_type object) const;
+    vd::result check(const_pointer_type object) const;
 
-    vd::result is_valid(const_reference_type object) const
+    vd::result check(const_reference_type object) const
     {
-        return is_valid(std::addressof(object));
+        return check(std::addressof(object));
     }
 
     void die_if_failed(const_pointer_type object) const
     {
-        vd::require<vd::validation_exception>(is_valid(object), "Object failed validation rules");
+        vd::require<vd::validation_exception>(check(object), "Object failed validation rules");
     }
 
     void die_if_failed(const_reference_type object) const
@@ -48,17 +49,18 @@ struct basic_model {
         die_if_failed(std::addressof(object));
     }
 
-    basic_bound_model<T> bind(const_pointer_type object) const
+    basic_bound_model<T> bind(vd::not_null<const_pointer_type> object) const&
     {
-        vd::require(object != nullptr, "Binding to nullptr objects is not allowed!");
-
         return basic_bound_model<T>::bind(*this, object);
     }
 
-    basic_bound_model<T> bind(const_reference_type object) const
+    basic_bound_model<T> bind(const_reference_type object) const&
     {
         return bind(std::addressof(object));
     }
+
+    basic_bound_model<T> bind(vd::not_null<const_pointer_type>) const&& = delete;
+    basic_bound_model<T> bind(const_reference_type) const&& = delete;
 
     void add_rule(vd::rule<T> rule)
     {
@@ -79,13 +81,19 @@ struct basic_model {
 
     basic_model& with(const basic_model& other) &
     {
-        m_rules.insert(m_rules.end(), other.m_rules.begin(), other.m_rules.end());
+        if(this != &other) {
+            m_rules.insert(m_rules.end(), other.m_rules.begin(), other.m_rules.end());
+        }
+
         return *this;
     }
 
     basic_model with(const basic_model& other) &&
     {
-        m_rules.insert(m_rules.end(), other.m_rules.begin(), other.m_rules.end());
+        if(this != &other) {
+            m_rules.insert(m_rules.end(), other.m_rules.begin(), other.m_rules.end());
+        }
+
         return std::move(*this);
     }
 
@@ -112,9 +120,9 @@ struct basic_bound_model {
 
     using model_type = basic_model<T>;
 
-    vd::result is_valid() const
+    vd::result check() const
     {
-        return m_model.is_valid(m_object);
+        return m_model.check(m_object);
     }
 
     void die_if_failed() const
@@ -123,24 +131,23 @@ struct basic_bound_model {
     }
 
     // bind stores a non-owning reference — the model must outlive the bound instance.
-    static basic_bound_model bind(const model_type& model, const_pointer_type object)
+    static basic_bound_model bind(const model_type& model, vd::not_null<const_pointer_type> object)
     {
         return basic_bound_model(model, object);
     }
 
 private:
-    basic_bound_model(const model_type& model, const_pointer_type object) : m_model(model), m_object(object)
+    basic_bound_model(const model_type& model, vd::not_null<const_pointer_type> object) : m_model(model), m_object(object)
     {
-        vd::require(object != nullptr, "Object pointer cannot be null");
     }
 
     const model_type& m_model;
-    const_pointer_type m_object;
+    vd::not_null<const_pointer_type> m_object;
 };
 
 template<typename T>
 requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
-vd::result basic_model<T>::is_valid(const_pointer_type object) const
+vd::result basic_model<T>::check(const_pointer_type object) const
 {
     if(object == nullptr) {
         return vd::result(false);
@@ -162,14 +169,14 @@ template<typename T, typename... Args>
 requires(std::same_as<std::decay_t<Args>, T> && ...)
 bool validate_many(const basic_model<T>& model, Args&&... objects)
 {
-    return (model.is_valid(objects) && ...);
+    return (model.check(objects).is_valid && ...);
 }
 
 template<typename T>
 bool validate_many(const basic_model<T>& model, const std::vector<T>& objects)
 {
     return std::ranges::all_of(objects, [&model](const T& obj) {
-        return model.is_valid(obj);
+        return model.check(obj).is_valid;
     });
 }
 
@@ -178,7 +185,7 @@ requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
 bool validate_many(const basic_model<T>& model, const std::vector<T*>& object_ptrs)
 {
     return std::ranges::all_of(object_ptrs, [&model](const T* obj) {
-        return model.is_valid(obj);
+        return model.check(obj).is_valid;
     });
 }
 
@@ -187,7 +194,7 @@ requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
 bool validate_many(const basic_model<T>& model, const std::vector<const T*>& object_ptrs)
 {
     return std::ranges::all_of(object_ptrs, [&model](const T* obj) {
-        return model.is_valid(obj);
+        return model.check(obj).is_valid;
     });
 }
 } // namespace vd

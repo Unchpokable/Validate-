@@ -5,7 +5,11 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Sort-Object)",
       "Bash(cd /c/Users/Unchp/source/repos/Validate && find . -type d | head -50)",
-      "Read(//c/Users/Unchp/source/repos/**)"
+      "Read(//c/Users/Unchp/source/repos/**)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Unchp\\\\source\\\\repos\\\\Validate!\\\\src\\\\models\\\\\" -Recurse | Select-Object -Property FullName, PSIsContainer | Sort-Object FullName)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Unchp\\\\source\\\\repos\\\\Validate!\" -Recurse -Filter \"*\")",
+      "Bash(Select-Object -First 20)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Unchp\\\\source\\\\repos\\\\Validate!\" -Recurse | Select-Object -First 30 | ForEach-Object { $_.FullName })"
     ]
   }
 }

@@ -20,10 +20,11 @@ namespace vd
 // Example: vd::field("Foo::x", &Foo::get_x, some_bounds)
 template<typename MemberPtr, typename Checker>
 requires std::is_member_function_pointer_v<std::remove_cvref_t<MemberPtr>>
+         && value_checker<Checker, std::invoke_result_t<MemberPtr, const member_class_t<MemberPtr>&>>
 auto field(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule<member_class_t<MemberPtr>>
 {
     using T = member_class_t<MemberPtr>;
-    return rule<T>([field_name, ptr, checker](const T& obj) -> vd::result {
+    return rule<T>([field_name = std::string(field_name), ptr, checker](const T& obj) -> vd::result {
         auto val = std::invoke(ptr, obj);
 
         using checker_return = std::invoke_result_t<Checker, decltype(val)>;
@@ -31,7 +32,7 @@ auto field(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule<
         if constexpr(std::same_as<checker_return, vd::result>) {
             vd::result r = checker(val);
             if(!r) {
-                return vd::result::failed(r.failed_rules);
+                return vd::result::failed({ std::format("Field {} failed: {}", field_name, r.short_format()) });
             }
             return vd::result::ok();
         }
@@ -47,6 +48,7 @@ auto field(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule<
 
 template<typename MemberPtr, typename Checker>
 requires std::is_member_function_pointer_v<std::remove_cvref_t<MemberPtr>>
+         && value_checker<Checker, std::invoke_result_t<MemberPtr, const member_class_t<MemberPtr>&>>
 auto field(MemberPtr ptr, Checker checker) -> rule<member_class_t<MemberPtr>>
 {
     return field("Unnamed", ptr, std::move(checker));
@@ -56,11 +58,12 @@ auto field(MemberPtr ptr, Checker checker) -> rule<member_class_t<MemberPtr>>
 // Example: vd::member(&Foo::x, some_bounds)
 template<typename MemberPtr, typename Checker>
 requires std::is_member_object_pointer_v<std::remove_cvref_t<MemberPtr>>
+         && value_checker<Checker, std::invoke_result_t<MemberPtr, const member_class_t<MemberPtr>&>>
 auto member(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule<member_class_t<MemberPtr>>
 {
     using T = member_class_t<MemberPtr>;
 
-    return rule<T>([field_name, ptr, checker](const T& obj) -> vd::result {
+    return rule<T>([field_name = std::string(field_name), ptr, checker](const T& obj) -> vd::result {
         auto val = std::invoke(ptr, obj);
 
         using checker_return = std::invoke_result_t<Checker, decltype(val)>;
@@ -68,7 +71,7 @@ auto member(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule
         if constexpr(std::same_as<checker_return, vd::result>) {
             vd::result r = checker(val);
             if(!r) {
-                return vd::result::failed(r.failed_rules);
+                return vd::result::failed({ std::format("Field {} failed: {}", field_name, r.short_format()) });
             }
             return vd::result::ok();
         }
@@ -86,6 +89,7 @@ auto member(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule
 // Example: vd::member(&Foo::x, some_bounds)
 template<typename MemberPtr, typename Checker>
 requires std::is_member_object_pointer_v<std::remove_cvref_t<MemberPtr>>
+         && value_checker<Checker, std::invoke_result_t<MemberPtr, const member_class_t<MemberPtr>&>>
 auto member(MemberPtr ptr, Checker checker) -> rule<member_class_t<MemberPtr>>
 {
     return member("Unnamed", ptr, std::move(checker));

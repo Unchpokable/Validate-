@@ -17,12 +17,23 @@ std::string vd::result::format() const
 {
     std::stringstream ss;
 
-    std::int32_t counter;
-    for(auto msg : failed_rules) {
-        ss << std::format("[#{}] Fail reason: {}\n", counter, msg);
+    std::int32_t counter { 0 };
+    for(const auto& msg : failed_rules) {
+        ss << std::format("[#{}] Fail reason: {}\n", counter++, msg);
     }
 
     return std::format("Result fail report: \n{}", ss.str());
+}
+
+std::string vd::result::short_format() const
+{
+    std::stringstream ss;
+
+    for(const auto& msg : failed_rules) {
+        ss << std::format("{}, ", msg);
+    }
+
+    return ss.str();
 }
 
 void vd::result::with_other(const vd::result& other)
@@ -31,6 +42,18 @@ void vd::result::with_other(const vd::result& other)
         is_valid = is_valid && other.is_valid;
         failed_rules.insert(failed_rules.end(), other.failed_rules.begin(), other.failed_rules.end());
     }
+}
+
+vd::result& vd::result::also(const result& other) &
+{
+    this->with_other(other);
+    return *this;
+}
+
+vd::result vd::result::also(const result& other) &&
+{
+    this->with_other(other);
+    return std::move(*this);
 }
 
 void vd::result::die_if_failed() const

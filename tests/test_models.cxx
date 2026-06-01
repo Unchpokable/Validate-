@@ -1,4 +1,9 @@
+#include "models/vd_numeric.hxx"
+#include "gtest/gtest.h"
 #include <gtest/gtest.h>
+#include <limits>
+
+#define VD_EXPORT_UNSAFE
 #include <vd.hxx>
 
 // ---------------------------------------------------------------------------
@@ -134,6 +139,56 @@ TEST(NumericBoundsTest, IntegerLessThanStepsByOne)
     EXPECT_FALSE(bounds(6));
     EXPECT_TRUE(bounds(4));
     EXPECT_TRUE(bounds(std::numeric_limits<int32_t>::min()));
+}
+
+TEST(NumericBoundsTest, IntegerAlwaysFinite)
+{
+    auto rule = vd::numeric::finite<int>();
+
+    EXPECT_TRUE(rule(static_cast<int>(5)));
+    EXPECT_TRUE(rule(std::numeric_limits<int>::max()));
+    EXPECT_TRUE(rule(std::numeric_limits<int>::lowest()));
+
+    auto rule_unsigned = vd::numeric::finite<unsigned int>();
+
+    EXPECT_TRUE(rule(static_cast<unsigned int>(5)));
+    EXPECT_TRUE(rule(std::numeric_limits<unsigned int>::max()));
+    EXPECT_TRUE(rule(std::numeric_limits<unsigned int>::lowest()));
+}
+
+TEST(NumericBoundsTest, FloatsAndDoublesInfiniteFails)
+{
+    auto rule = vd::numeric::finite<float>();
+
+    EXPECT_FALSE(rule(std::numeric_limits<float>::infinity()));
+
+    auto rule_double = vd::numeric::finite<double>();
+
+    EXPECT_FALSE(rule(std::numeric_limits<double>::infinity()));
+}
+
+TEST(NumericBoundsTest, FloatsAndDoublesNaNFails)
+{
+    auto rule = vd::numeric::finite<float>();
+
+    EXPECT_FALSE(rule(std::numeric_limits<float>::quiet_NaN()));
+
+    auto rule_double = vd::numeric::finite<double>();
+
+    EXPECT_FALSE(rule_double(std::numeric_limits<double>::quiet_NaN()));
+}
+
+TEST(NumericBoundsTest, FiniteFloatsPassesOnBoundaries)
+{
+    auto rule = vd::numeric::finite<double>();
+
+    EXPECT_TRUE(rule(std::numeric_limits<double>::denorm_min()));
+    EXPECT_TRUE(rule(std::numeric_limits<double>::max()));
+
+    auto rule_float = vd::numeric::finite<float>();
+
+    EXPECT_TRUE(rule(std::numeric_limits<float>::denorm_min()));
+    EXPECT_TRUE(rule(std::numeric_limits<float>::max()));
 }
 
 // ---------------------------------------------------------------------------
@@ -362,21 +417,21 @@ TEST(BasicModelTest, EmptyModelAcceptsAnything)
 {
     // A model with no rules should treat every object as valid.
     vd::basic_model<Point> model;
-    EXPECT_TRUE(model.is_valid(Point { -999.0, -999.0 }));
+    EXPECT_TRUE(model.check(Point { -999.0, -999.0 }));
 }
 
 TEST(BasicModelTest, SingleRuleAcceptedObject)
 {
     auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
 
-    EXPECT_TRUE(model.is_valid(Point { 5.0, 0.0 }));
+    EXPECT_TRUE(model.check(Point { 5.0, 0.0 }));
 }
 
 TEST(BasicModelTest, SingleRuleRejectedObject)
 {
     auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
 
-    EXPECT_FALSE(model.is_valid(Point { -1.0, 0.0 }));
+    EXPECT_FALSE(model.check(Point { -1.0, 0.0 }));
 }
 
 TEST(BasicModelTest, AllRulesMustPassForValid)
@@ -386,10 +441,10 @@ TEST(BasicModelTest, AllRulesMustPassForValid)
                      .with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)))
                      .with(vd::member(&Point::y, vd::double_bounds::inclusive(0.0, 10.0)));
 
-    EXPECT_TRUE(model.is_valid(Point { 5.0, 5.0 }));
-    EXPECT_FALSE(model.is_valid(Point { -1.0, 5.0 }));  // x fails
-    EXPECT_FALSE(model.is_valid(Point { 5.0, -1.0 }));  // y fails
-    EXPECT_FALSE(model.is_valid(Point { -1.0, -1.0 })); // both fail
+    EXPECT_TRUE(model.check(Point { 5.0, 5.0 }));
+    EXPECT_FALSE(model.check(Point { -1.0, 5.0 }));  // x fails
+    EXPECT_FALSE(model.check(Point { 5.0, -1.0 }));  // y fails
+    EXPECT_FALSE(model.check(Point { -1.0, -1.0 })); // both fail
 }
 
 TEST(BasicModelTest, InitializerListConstructor)
@@ -399,8 +454,8 @@ TEST(BasicModelTest, InitializerListConstructor)
         vd::member(&Point::y, vd::double_bounds::inclusive(0.0, 10.0)),
     });
 
-    EXPECT_TRUE(model.is_valid(Point { 1.0, 1.0 }));
-    EXPECT_FALSE(model.is_valid(Point { 1.0, 20.0 }));
+    EXPECT_TRUE(model.check(Point { 1.0, 1.0 }));
+    EXPECT_FALSE(model.check(Point { 1.0, 20.0 }));
 }
 
 TEST(BasicModelTest, WithInitializerListAddsAllRules)
@@ -410,8 +465,8 @@ TEST(BasicModelTest, WithInitializerListAddsAllRules)
         vd::member(&Point::y, vd::double_bounds::inclusive(0.0, 10.0)),
     });
 
-    EXPECT_TRUE(model.is_valid(Point { 5.0, 5.0 }));
-    EXPECT_FALSE(model.is_valid(Point { 5.0, 11.0 }));
+    EXPECT_TRUE(model.check(Point { 5.0, 5.0 }));
+    EXPECT_FALSE(model.check(Point { 5.0, 11.0 }));
 }
 
 TEST(BasicModelTest, WithMergesAnotherModel)
@@ -423,9 +478,9 @@ TEST(BasicModelTest, WithMergesAnotherModel)
 
     auto combined = vd::basic_model<Point>().with(x_model).with(y_model);
 
-    EXPECT_TRUE(combined.is_valid(Point { 5.0, 5.0 }));
-    EXPECT_FALSE(combined.is_valid(Point { -1.0, 5.0 }));
-    EXPECT_FALSE(combined.is_valid(Point { 5.0, -1.0 }));
+    EXPECT_TRUE(combined.check(Point { 5.0, 5.0 }));
+    EXPECT_FALSE(combined.check(Point { -1.0, 5.0 }));
+    EXPECT_FALSE(combined.check(Point { 5.0, -1.0 }));
 }
 
 TEST(BasicModelTest, AddRuleAppendsDynamically)
@@ -433,8 +488,8 @@ TEST(BasicModelTest, AddRuleAppendsDynamically)
     vd::basic_model<Point> model;
     model.add_rule(vd::member(&Point::x, vd::double_bounds::greater_than(0.0)));
 
-    EXPECT_TRUE(model.is_valid(Point { 1.0, 0.0 }));
-    EXPECT_FALSE(model.is_valid(Point { 0.0, 0.0 }));
+    EXPECT_TRUE(model.check(Point { 1.0, 0.0 }));
+    EXPECT_FALSE(model.check(Point { 0.0, 0.0 }));
 }
 
 TEST(BasicModelTest, IsValidByPointer)
@@ -442,10 +497,10 @@ TEST(BasicModelTest, IsValidByPointer)
     auto model = vd::basic_model<Point>().with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
 
     Point p { 5.0, 0.0 };
-    EXPECT_TRUE(model.is_valid(&p));
+    EXPECT_TRUE(model.check(&p));
 
     Point q { -1.0, 0.0 };
-    EXPECT_FALSE(model.is_valid(&q));
+    EXPECT_FALSE(model.check(&q));
 }
 
 // ---------------------------------------------------------------------------
@@ -458,18 +513,18 @@ TEST(BoundModelTest, IsValidDelegatesToModel)
 
     Point p { 5.0, 0.0 };
     auto bound = model.bind(p);
-    EXPECT_TRUE(bound.is_valid());
+    EXPECT_TRUE(bound.check());
 
     Point q { -1.0, 0.0 };
     auto bound_invalid = model.bind(q);
-    EXPECT_FALSE(bound_invalid.is_valid());
+    EXPECT_FALSE(bound_invalid.check());
 }
 
 TEST(BoundModelTest, BindByPointerAbortOnNull)
 {
-    // Passing a null pointer to bind() must abort — it violates the precondition.
+    // Passing a null pointer to bind() must throw — it violates the precondition.
     auto model = vd::basic_model<Point>();
-    EXPECT_DEATH(model.bind(static_cast<const Point*>(nullptr)), "");
+    EXPECT_THROW(model.bind(static_cast<const Point*>(nullptr)), vd::assertion_exception);
 }
 
 // ---------------------------------------------------------------------------
@@ -575,10 +630,10 @@ TEST(MixedRulesTest, AllFactoryTypesCompose)
                          return !std::isnan(p.x) && !std::isnan(p.y);
                      }));
 
-    EXPECT_TRUE(model.is_valid(Point { 3.0, 4.0 }));
-    EXPECT_FALSE(model.is_valid(Point { -1.0, 4.0 }));  // x out of range
-    EXPECT_FALSE(model.is_valid(Point { 99.0, 99.0 })); // magnitude too large
-    EXPECT_FALSE(model.is_valid(Point { std::numeric_limits<double>::quiet_NaN(), 0.0 }));
+    EXPECT_TRUE(model.check(Point { 3.0, 4.0 }));
+    EXPECT_FALSE(model.check(Point { -1.0, 4.0 }));  // x out of range
+    EXPECT_FALSE(model.check(Point { 99.0, 99.0 })); // magnitude too large
+    EXPECT_FALSE(model.check(Point { std::numeric_limits<double>::quiet_NaN(), 0.0 }));
 }
 
 // ---------------------------------------------------------------------------
@@ -896,4 +951,32 @@ TEST(ValidateManyConstPtrVectorTest, NullPointerInVectorReturnsFalse)
     const Point a { 1.0, 0.0 };
     std::vector<const Point*> ptrs { &a, nullptr };
     EXPECT_FALSE(vd::validate_many(model, ptrs));
+}
+
+// ----------------
+// Macro definition tests
+// ----------------
+TEST(MemberAndFieldMacros, MacroGeneratesValidChecker)
+{
+    auto model = vd::basic_model<Point>().with(VD_MEMBER(Point, x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    const Point a { 1.0, 0.0 };
+
+    EXPECT_TRUE(model.check(a));
+}
+
+TEST(MemberAndFieldMacros, GeneratedFieldNameCorrect)
+{
+    auto model = vd::basic_model<Point>().with(VD_MEMBER(Point, x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    const Point a { -1.0, 0.0 };
+
+    auto verdict = model.check(a);
+
+    EXPECT_FALSE(verdict.is_valid);
+    EXPECT_EQ(verdict.failed_rules.size(), 1);
+
+    auto contains_field_name = verdict.failed_rules[0];
+
+    EXPECT_NE(contains_field_name.find("x"), std::string::npos);
 }

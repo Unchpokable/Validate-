@@ -28,7 +28,7 @@ requires qstring_matcher<Matcher>
 struct qstring_match {
     enum class mode { include, exclude };
     mode match_mode = mode::include;
-    std::string_view check_description = "string check failed";
+    std::string check_description = "string check failed";
 
     constexpr qstring_match() = default;
     constexpr qstring_match(mode m) : match_mode(m)
@@ -50,9 +50,10 @@ struct qstring_match {
 
 // Runtime regex checker using QRegularExpression (PCRE2, full Unicode support).
 // Uses full-string match semantics to mirror std::regex_match behaviour.
+// QRegularExpression is compiled once at construction via the regex() factory.
 struct qregex_checker {
     enum class mode { include, exclude };
-    QString pattern;
+    QRegularExpression re;
     mode match_mode = mode::include;
 
     vd::result operator()(QStringView s) const;
@@ -68,9 +69,6 @@ bool empty_or_whitespace_string(QStringView s);
 // Reuses the same CTRE patterns as the std counterpart via UTF-8 conversion.
 bool email_like(QStringView s);
 bool uri_like(QStringView s);
-// Full-string match: capturedStart==0 and capturedLength==subject length,
-// mirroring std::regex_match rather than std::regex_search.
-bool qregex(QStringView s, const QString& pattern);
 } // namespace vd::qt::string_rules::detail
 
 namespace vd::qt::string_rules

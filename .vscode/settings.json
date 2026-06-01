@@ -1,5 +1,7 @@
 {
     "editor.formatOnSave": true,
+    "terminal.integrated.fontFamily": "Comic Mono",
+    "editor.fontFamily": "Comic Mono",
     "editor.semanticTokenColorCustomizations": {
         "rules": {
             "enumMember": "#b8d7a3",

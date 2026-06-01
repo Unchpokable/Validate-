@@ -1,3 +1,5 @@
+#pragma once
+
 #ifndef VD_EXCEPTION_HXX
 #define VD_EXCEPTION_HXX
 
@@ -23,6 +25,7 @@ private:
 };
 
 using validation_exception = vd_tagged_exception<struct validation_exception_tag>;
+using assertion_exception = vd_tagged_exception<struct assertion_exception_tag>;
 } // namespace vd
 
 #endif // VD_EXCEPTION_HXX

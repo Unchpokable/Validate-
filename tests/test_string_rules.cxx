@@ -192,16 +192,16 @@ TEST(StringRulesModelTest, MemberNonEmptyValidatesName)
 {
     auto model = vd::basic_model<Profile>().with(vd::member(&Profile::name, vd::string_rules::non_empty()));
 
-    EXPECT_TRUE(model.is_valid(Profile { "Alice", "", "" }));
-    EXPECT_FALSE(model.is_valid(Profile { "", "", "" }));
+    EXPECT_TRUE(model.check(Profile { "Alice", "", "" }));
+    EXPECT_FALSE(model.check(Profile { "", "", "" }));
 }
 
 TEST(StringRulesModelTest, MemberEmailLikeValidatesEmail)
 {
     auto model = vd::basic_model<Profile>().with(vd::member(&Profile::email, vd::string_rules::email_like()));
 
-    EXPECT_TRUE(model.is_valid(Profile { "x", "user@example.com", "" }));
-    EXPECT_FALSE(model.is_valid(Profile { "x", "notanemail", "" }));
+    EXPECT_TRUE(model.check(Profile { "x", "user@example.com", "" }));
+    EXPECT_FALSE(model.check(Profile { "x", "notanemail", "" }));
 }
 
 TEST(StringRulesModelTest, FieldGetterNonEmptyViaGetter)
@@ -209,8 +209,8 @@ TEST(StringRulesModelTest, FieldGetterNonEmptyViaGetter)
     // Uses vd::field with a member function pointer (getter).
     auto model = vd::basic_model<Profile>().with(vd::field(&Profile::get_name, vd::string_rules::non_empty()));
 
-    EXPECT_TRUE(model.is_valid(Profile { "Bob", "", "" }));
-    EXPECT_FALSE(model.is_valid(Profile { "", "", "" }));
+    EXPECT_TRUE(model.check(Profile { "Bob", "", "" }));
+    EXPECT_FALSE(model.check(Profile { "", "", "" }));
 }
 
 TEST(StringRulesModelTest, MultipleStringRulesAllMustPass)
@@ -220,18 +220,18 @@ TEST(StringRulesModelTest, MultipleStringRulesAllMustPass)
                      .with(vd::member(&Profile::name, vd::string_rules::non_empty()))
                      .with(vd::member(&Profile::email, vd::string_rules::email_like()));
 
-    EXPECT_TRUE(model.is_valid(Profile { "Alice", "a@b.com", "" }));
-    EXPECT_FALSE(model.is_valid(Profile { "", "a@b.com", "" }));  // name empty
-    EXPECT_FALSE(model.is_valid(Profile { "Alice", "bad", "" })); // email invalid
-    EXPECT_FALSE(model.is_valid(Profile { "", "bad", "" }));      // both fail
+    EXPECT_TRUE(model.check(Profile { "Alice", "a@b.com", "" }));
+    EXPECT_FALSE(model.check(Profile { "", "a@b.com", "" }));  // name empty
+    EXPECT_FALSE(model.check(Profile { "Alice", "bad", "" })); // email invalid
+    EXPECT_FALSE(model.check(Profile { "", "bad", "" }));      // both fail
 }
 
 TEST(StringRulesModelTest, MemberUriLikeValidatesWebsite)
 {
     auto model = vd::basic_model<Profile>().with(vd::member(&Profile::website, vd::string_rules::uri_like()));
 
-    EXPECT_TRUE(model.is_valid(Profile { "", "", "https://example.com" }));
-    EXPECT_FALSE(model.is_valid(Profile { "", "", "not-a-uri" }));
+    EXPECT_TRUE(model.check(Profile { "", "", "https://example.com" }));
+    EXPECT_FALSE(model.check(Profile { "", "", "not-a-uri" }));
 }
 
 TEST(StringRulesModelTest, RegexCheckerWorksWithMember)
@@ -239,7 +239,7 @@ TEST(StringRulesModelTest, RegexCheckerWorksWithMember)
     // Validate that the name consists only of word characters.
     auto model = vd::basic_model<Profile>().with(vd::member(&Profile::name, vd::string_rules::regex(R"(\w+)")));
 
-    EXPECT_TRUE(model.is_valid(Profile { "Alice123", "", "" }));
-    EXPECT_FALSE(model.is_valid(Profile { "Alice 123", "", "" })); // space not allowed
-    EXPECT_FALSE(model.is_valid(Profile { "", "", "" }));          // empty doesn't match \w+
+    EXPECT_TRUE(model.check(Profile { "Alice123", "", "" }));
+    EXPECT_FALSE(model.check(Profile { "Alice 123", "", "" })); // space not allowed
+    EXPECT_FALSE(model.check(Profile { "", "", "" }));          // empty doesn't match \w+
 }

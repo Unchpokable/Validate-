@@ -19,17 +19,18 @@ auto user_model = vd::basic_model<User>()
     .with(vd::member(&User::salary, vd::double_bounds::greater_than(0.0)));
 
 User u{"Alice", "alice@example.com", 30, 75000.0};
-bool ok = user_model.is_valid(u);  // true
+vd::result ok = user_model.is_valid(u);  // ok.is_valid == true
 ```
 
 ## Features
 
 - **Declarative models** — compose validation rules for any struct or class using a fluent builder API
-- **Type-safe rule factories** — `vd::member`, `vd::field`, `vd::predicate` with full template argument deduction
-- **Numeric bounds** — inclusive/exclusive ranges, one-sided bounds for all arithmetic types
+- **Rich results** — `vd::result` carries all failed rule messages, not just a `bool`
+- **Type-safe rule factories** — `vd::member`, `vd::field`, `vd::predicate` with full template argument deduction; optional field names in error messages
+- **Numeric bounds** — inclusive/exclusive ranges, one-sided bounds, and outside-range checks for all arithmetic types
 - **String checkers** — compile-time patterns via [CTRE](https://github.com/hanickadot/compile-time-regular-expressions), runtime `std::regex`, and common presets (`email_like`, `uri_like`, `non_empty`, …)
 - **Modern assertions** — `vd::require` with `std::format` messages, source-location diagnostics, optional exception throwing, and custom callbacks
-- **Qt extension** — `QString` / `QStringView` checkers and `Q_PROPERTY` validation for Qt 6 projects
+- **Qt extension** — `QString` / `QStringView` checkers and `Q_PROPERTY` validation for Qt 5/6 projects
 
 ## Requirements
 
@@ -95,89 +96,135 @@ Tests are only added when Validate! is the top-level CMake project. GTest is fet
 
 ## API overview
 
+### `vd::result`
+
+All validation calls return `vd::result` — a value that carries both the pass/fail status and the list of failure messages:
+
+```cpp
+struct result {
+    bool is_valid;
+    std::vector<std::string> failed_rules;
+
+    operator bool() const;          // if (result) { … }
+    std::string format() const;     // numbered multiline report
+    std::string short_format() const; // comma-separated single line
+    void die_if_failed() const;     // throws vd::validation_exception if not valid
+
+    static result ok();
+    static result failed(std::vector<std::string> messages);
+};
+```
+
 ### Models
 
-The core abstraction is `vd::basic_model<T>` — a collection of `vd::rule<T>` predicates applied sequentially by `is_valid()`.
+The core abstraction is `vd::basic_model<T>` — a collection of `vd::rule<T>` predicates. `is_valid()` runs **all** rules and aggregates every failure message into the returned `vd::result`; it does not stop at the first failure.
 
 ```cpp
 // Build a model
 auto model = vd::basic_model<Point>()
-    .with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 100.0)))
-    .with(vd::member(&Point::y, vd::double_bounds::inclusive(0.0, 100.0)))
+    .with(vd::member("x", &Point::x, vd::double_bounds::inclusive(0.0, 100.0)))
+    .with(vd::member("y", &Point::y, vd::double_bounds::inclusive(0.0, 100.0)))
     .with(vd::predicate([](const Point& p) { return p.x != p.y; }));
 
-// Validate
-bool ok = model.is_valid(point);          // by reference
-bool ok = model.is_valid(&point);         // by pointer (nullptr → abort)
+// Validate — all rules run, all failures collected
+vd::result r = model.is_valid(point);     // by reference
+vd::result r = model.is_valid(&point);    // by pointer (nullptr → result(false))
+
+if (!r) {
+    std::cerr << r.format();              // print all failure reasons
+}
+
+// Throw vd::validation_exception on failure
+model.die_if_failed(point);
 
 // Bind model to an object
 auto bound = model.bind(point);
-bool ok = bound.is_valid();
+vd::result r = bound.is_valid();
 ```
 
 **Rule factories:**
 
 | Factory | Use case |
 |---------|----------|
+| `vd::member("name", &T::field, checker)` | Direct field access with named error context |
 | `vd::member(&T::field, checker)` | Direct field access |
+| `vd::field("name", &T::getter, checker)` | Const member function with named error context |
 | `vd::field(&T::getter, checker)` | Const member function |
 | `vd::predicate([](const T&) { … })` | Arbitrary predicate |
 | `vd::rule<T>([](const T&) { … })` | Explicit construction |
 
-Any callable satisfying `V → bool` is a valid checker (`value_checker` concept).
+Any callable satisfying `V → bool` or `V → vd::result` is a valid checker (`value_checker` concept).
+
+**Validating multiple objects:**
+
+```cpp
+bool all_ok = vd::validate_many(model, a, b, c);             // variadic
+bool all_ok = vd::validate_many(model, vec_of_objects);       // std::vector<T>
+bool all_ok = vd::validate_many(model, vec_of_pointers);      // std::vector<T*>
+```
 
 ### Numeric bounds
 
 ```cpp
-vd::int_bounds::inclusive(0, 100)         // [0, 100]
-vd::int_bounds::exclusive(0, 100)         // (0, 100)
-vd::double_bounds::greater_than(0.0)      // (0, +∞)
-vd::float_bounds::less_than(1.0f)         // (-∞, 1)
-vd::long_bounds::unbounded()              // always true
+vd::int_bounds::inclusive(0, 100)               // [0, 100]
+vd::int_bounds::exclusive(0, 100)               // (0, 100)  — works for integers too
+vd::double_bounds::greater_than(0.0)            // (0, +∞)
+vd::float_bounds::less_than(1.0f)               // (-∞, 1)
+vd::long_bounds::unbounded()                    // always true
+vd::double_bounds::outside_inclusive(1.0, 9.0)  // ≤ 1.0 or ≥ 9.0
+vd::double_bounds::outside_exclusive(1.0, 9.0)  // < 1.0 or > 9.0
 ```
 
-Any `numeric_bounds` bound uses library's own custom `vd::ct_nextafter()` (`constexpr` implementation of `std::nextafter` compatible with integer types) function so it can work with any default numeric type.
+Exclusive bounds use the library's own `vd::ct_nextafter<T>` — a `constexpr` implementation of `std::nextafter` that works with both floating-point and integer types.
 
-Available aliases: `byte_bounds`, `short_bounds`, `int_bounds`, `long_bounds`, `float_bounds`, `double_bounds`, and their unsigned variants.
+Check for finite values (rejects `NaN` and `inf`):
+
+```cpp
+vd::numeric::finite<double>()
+```
+
+Available aliases: `byte_bounds`, `short_bounds`, `int_bounds`, `long_bounds`, `float_bounds`, `double_bounds`, and their unsigned / signed variants.
 
 ### String rules
 
 ```cpp
 vd::string_rules::non_empty()              // length > 0
 vd::string_rules::empty()                 // length == 0
-vd::string_rules::empty_or_whitespace()   // empty or whitespace-only
+vd::string_rules::empty_or_whitespace()   // empty or ASCII whitespace only
 vd::string_rules::email_like()            // ^\S+@\S+\.\S+$ via CTRE
 vd::string_rules::uri_like()              // ^\w+://\S+$ via CTRE
 vd::string_rules::regex(R"(\d{5})")       // runtime std::regex (full-string match)
 ```
 
-All checkers accept `std::string_view`; `std::string` fields work without explicit conversion.
+All checkers accept `std::string_view` and return `vd::result`. `std::string` fields work without explicit conversion.
 
 ### Assert module
 
 `vd::require` is a type-safe, source-aware replacement for `assert()`.
 
 ```cpp
-// Abort on failure (prints file, line, function to stderr)
+// Abort on failure — prints file, line, function to stderr
 vd::require(ptr != nullptr, "Expected non-null pointer in {}", __func__);
 
-// Throw on failure
+// Throw on failure — exception.what() contains the formatted message only
 vd::require<std::runtime_error>(value > 0, "Value must be positive, got {}", value);
 
-// Custom callback on failure (zero-overhead NTTP)
-void my_logger(std::string msg) { /* … */ }
+// Custom callback on failure (zero-overhead NTTP, receives std::string_view)
+void my_logger(std::string_view msg) { /* … */ }
 vd::require_callback<my_logger>(ok, "Validation failed: {}", reason);
 ```
 
 The format string is checked at compile time via `std::format_string`. Source location is captured at the call site — diagnostics always point to your code, not library internals.
 
-**Output on failure:**
+**Output on abort:**
 ```
 Assertion failed: Expected non-null pointer in foo
 File: src/foo.cpp
 Line: 42
 Function: void foo()
 ```
+
+**Debug-only overloads** (`required`, `require_callbackd`) compile to no-ops when `_NDEBUG` is defined.
 
 ### Qt extension
 
@@ -186,7 +233,7 @@ Drop-in counterparts for Qt types:
 ```cpp
 #include <vd.hxx>  // Qt extensions included automatically when VD_EXTENSION_QT_BASE=ON
 
-// QString checkers (mirror of vd::string_rules)
+// QString checkers (mirror of vd::string_rules, operate on QStringView)
 vd::qt::string_rules::non_empty()
 vd::qt::string_rules::email_like()
 vd::qt::string_rules::regex(R"(\+7\d{10})")  // uses QRegularExpression / PCRE2
@@ -197,22 +244,25 @@ auto model = vd::basic_model<MyQObject>()
     .with(vd::qt::qt_property<MyQObject>("age",   vd::int_bounds::inclusive(18, 120)));
 ```
 
-`qt_property` reads property values through the Qt meta-object system at validation time. Returns `false` (without abort) if the property does not exist or the value cannot be converted to the expected type.
+`qt_property` reads property values through the Qt meta-object system at validation time. Returns a failed `vd::result` (without abort) if the object is not a `QObject`, the property does not exist, or the value cannot be converted to the expected type.
 
 The Qt `empty_or_whitespace()` checker uses `QChar::isSpace()` and covers all Unicode whitespace, unlike the std version which checks ASCII only.
 
 ## Extending the library
 
-Any callable `V → bool` is a valid checker — no inheritance or registration required:
+Any callable `V → bool` or `V → vd::result` is a valid checker — no inheritance or registration required. Returning `vd::result` is preferred as it carries the failure reason:
 
 ```cpp
-// Lambda
+// Lambda (bool return)
 vd::member(&Product::price, [](double v) { return v > 0 && v < 1e6; })
 
-// Stateful checker struct
+// Stateful checker struct with detailed error message
 struct min_length {
     std::size_t n;
-    bool operator()(std::string_view s) const noexcept { return s.size() >= n; }
+    vd::result operator()(std::string_view s) const {
+        if (s.size() >= n) return vd::result::ok();
+        return vd::result::failed({std::format("string length {} < minimum {}", s.size(), n)});
+    }
 };
 vd::member(&Post::body, min_length{10})
 
@@ -238,11 +288,17 @@ namespace my_rules {
 src/
 ├── vd.hxx                    # Single public header
 ├── assert/vd_assert.hxx      # vd::require / vd::require_callback
+├── core/
+│   ├── vd_result.hxx         # vd::result
+│   ├── vd_exception.hxx      # vd::validation_exception
+│   └── vd_defines.hxx        # Attribute macros (VD_NODISCARD, etc.)
 ├── models/
-│   ├── vd_rule.hxx           # rule<T>, factory functions
-│   ├── vd_basic_model.hxx    # basic_model<T>, basic_bound_model<T>
+│   ├── vd_rule.hxx           # rule<T>, value_checker concept
+│   ├── vd_rule_factory.hxx   # vd::field(), vd::member(), vd::predicate()
+│   ├── vd_basic_model.hxx    # basic_model<T>, basic_bound_model<T>, validate_many()
 │   ├── vd_numeric.hxx        # numeric_bounds<T> and type aliases
 │   └── vd_string_rules.hxx   # string_match, regex_checker, factories
+├── utils/vd_ctnextafter.hxx  # constexpr ct_nextafter<T> + generic_numer concept
 └── inline_deps/ctre.hpp      # Bundled CTRE (compile-time regex)
 
 ext/qt/

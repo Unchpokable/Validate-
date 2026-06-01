@@ -6,7 +6,9 @@
 
 ## Написание нового checker-а
 
-Требование одно: тип должен быть callable `V -> bool` (удовлетворять `value_checker<Checker, V>`). Никакого наследования, макросов или регистрации не нужно.
+Требование одно: тип должен быть callable `V -> bool` или `V -> vd::result` (удовлетворять `value_checker<Checker, V>`). Никакого наследования, макросов или регистрации не нужно.
+
+Возврат `vd::result` предпочтительнее — он позволяет передать текст ошибки, который попадёт в `vd::result::failed_rules`.
 
 ### Вариант 1: лямбда
 
@@ -25,12 +27,18 @@ auto model = vd::basic_model<Product>()
 ```cpp
 struct multiple_of {
     int divisor;
-    bool operator()(int v) const noexcept { return v % divisor == 0; }
+    vd::result operator()(int v) const noexcept {
+        if(v % divisor == 0) return vd::result::ok();
+        return vd::result::failed({std::format("value {} is not divisible by {}", v, divisor)});
+    }
 };
 
 struct min_length {
     std::size_t n;
-    bool operator()(std::string_view s) const noexcept { return s.size() >= n; }
+    vd::result operator()(std::string_view s) const noexcept {
+        if(s.size() >= n) return vd::result::ok();
+        return vd::result::failed({std::format("string length {} < minimum {}", s.size(), n)});
+    }
 };
 
 auto model = vd::basic_model<Item>()
@@ -84,13 +92,14 @@ inline auto hex_color() {
 #define VD_MY_MODULE_HXX
 
 #include "vd_basic_model.hxx"
+#include "core/vd_result.hxx"
 // ... другие нужные заголовки
 
 namespace vd::my_rules
 {
 struct my_checker {
     /* параметры */
-    bool operator()(/* тип значения */ v) const;
+    vd::result operator()(/* тип значения */ v) const;
 };
 
 inline my_checker some_condition(/* параметры */)
@@ -107,34 +116,6 @@ inline my_checker some_condition(/* параметры */)
 ## Расширение `basic_model`
 
 `basic_model<T>` намеренно минималистичен: только набор правил и `is_valid`. Если нужен специализированный тип модели (например, с кешированием результатов, именованными правилами или агрегацией ошибок), наследоваться не нужно — достаточно написать новый тип, который использует `rule<T>` внутри.
-
----
-
-## Переход на `vd::result` (план на будущее)
-
-Сейчас `rule<T>::operator()` и `basic_model::is_valid()` возвращают `bool`. Если в будущем потребуется возвращать диагностику (какое правило не сработало, почему), потребуется:
-
-1. Ввести `vd::result` — тип, неявно конструируемый из `bool`:
-   ```cpp
-   struct result {
-       bool ok;
-       std::string reason;  // или что-то подобное
-       
-       /* implicit */ result(bool b) : ok(b) {}
-       explicit operator bool() const { return ok; }
-   };
-   ```
-
-2. Заменить в `rule<T>`:
-   ```cpp
-   std::function<bool(const T&)>  →  std::function<result(const T&)>
-   ```
-
-3. Изменить агрегацию в `basic_model::is_valid` — собирать failed results, а не просто возвращать `false`.
-
-4. Существующие checker-ы (`numeric_bounds`, `string_match`, лямбды) остаются нетронутыми: неявная конструкция `result` из `bool` обеспечивает обратную совместимость.
-
-Фабричные функции `field` / `member` / `predicate` при этом не изменяются.
 
 ---
 

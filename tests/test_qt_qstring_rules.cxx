@@ -267,8 +267,8 @@ TEST(QStringRulesRegexTest, WorksWithQStringView)
 
 TEST(QStringRulesRegexDeathTest, InvalidPatternAborts)
 {
-    auto checker = vd::qt::string_rules::regex("[invalid");
-    EXPECT_DEATH(checker(QString("anything")), "");
+    // An invalid regex pattern must trigger vd::require and abort.
+    EXPECT_DEATH(vd::qt::string_rules::regex("[invalid"), "");
 }
 
 // ---------------------------------------------------------------------------
@@ -281,33 +281,33 @@ TEST(QStringRulesMemberTest, MemberNonEmptyValidatesName)
 {
     auto model = vd::basic_model<QStringProfile>().with(vd::member(&QStringProfile::name, vd::qt::string_rules::non_empty()));
 
-    EXPECT_TRUE(model.is_valid(QStringProfile { "Alice", "", "" }));
-    EXPECT_FALSE(model.is_valid(QStringProfile { "", "", "" }));
+    EXPECT_TRUE(model.check(QStringProfile { "Alice", "", "" }));
+    EXPECT_FALSE(model.check(QStringProfile { "", "", "" }));
 }
 
 TEST(QStringRulesMemberTest, MemberEmailLikeValidatesEmail)
 {
     auto model = vd::basic_model<QStringProfile>().with(vd::member(&QStringProfile::email, vd::qt::string_rules::email_like()));
 
-    EXPECT_TRUE(model.is_valid(QStringProfile { "x", "user@example.com", "" }));
-    EXPECT_FALSE(model.is_valid(QStringProfile { "x", "notanemail", "" }));
+    EXPECT_TRUE(model.check(QStringProfile { "x", "user@example.com", "" }));
+    EXPECT_FALSE(model.check(QStringProfile { "x", "notanemail", "" }));
 }
 
 TEST(QStringRulesMemberTest, MemberUriLikeValidatesWebsite)
 {
     auto model = vd::basic_model<QStringProfile>().with(vd::member(&QStringProfile::website, vd::qt::string_rules::uri_like()));
 
-    EXPECT_TRUE(model.is_valid(QStringProfile { "", "", "https://example.com" }));
-    EXPECT_FALSE(model.is_valid(QStringProfile { "", "", "not-a-uri" }));
+    EXPECT_TRUE(model.check(QStringProfile { "", "", "https://example.com" }));
+    EXPECT_FALSE(model.check(QStringProfile { "", "", "not-a-uri" }));
 }
 
 TEST(QStringRulesMemberTest, RegexCheckerWorksWithMember)
 {
     auto model = vd::basic_model<QStringProfile>().with(vd::member(&QStringProfile::name, vd::qt::string_rules::regex(R"(\w+)")));
 
-    EXPECT_TRUE(model.is_valid(QStringProfile { "Alice123", "", "" }));
-    EXPECT_FALSE(model.is_valid(QStringProfile { "Alice 123", "", "" })); // space not allowed
-    EXPECT_FALSE(model.is_valid(QStringProfile { "", "", "" }));          // empty fails \w+
+    EXPECT_TRUE(model.check(QStringProfile { "Alice123", "", "" }));
+    EXPECT_FALSE(model.check(QStringProfile { "Alice 123", "", "" })); // space not allowed
+    EXPECT_FALSE(model.check(QStringProfile { "", "", "" }));          // empty fails \w+
 }
 
 TEST(QStringRulesMemberTest, MultipleRulesAllMustPass)
@@ -316,10 +316,10 @@ TEST(QStringRulesMemberTest, MultipleRulesAllMustPass)
                      .with(vd::member(&QStringProfile::name, vd::qt::string_rules::non_empty()))
                      .with(vd::member(&QStringProfile::email, vd::qt::string_rules::email_like()));
 
-    EXPECT_TRUE(model.is_valid(QStringProfile { "Alice", "a@b.com", "" }));
-    EXPECT_FALSE(model.is_valid(QStringProfile { "", "a@b.com", "" }));  // name empty
-    EXPECT_FALSE(model.is_valid(QStringProfile { "Alice", "bad", "" })); // email invalid
-    EXPECT_FALSE(model.is_valid(QStringProfile { "", "bad", "" }));      // both fail
+    EXPECT_TRUE(model.check(QStringProfile { "Alice", "a@b.com", "" }));
+    EXPECT_FALSE(model.check(QStringProfile { "", "a@b.com", "" }));  // name empty
+    EXPECT_FALSE(model.check(QStringProfile { "Alice", "bad", "" })); // email invalid
+    EXPECT_FALSE(model.check(QStringProfile { "", "bad", "" }));      // both fail
 }
 
 // ---------------------------------------------------------------------------
@@ -396,13 +396,13 @@ TEST(QStringRulesQtPropertyTest, ModelCombiningMultipleStringPropertyRules)
                      }));
 
     StringQObject valid("Alice", "alice@example.com", "");
-    EXPECT_TRUE(model.is_valid(valid));
+    EXPECT_TRUE(model.check(valid));
 
     StringQObject bad_name("", "alice@example.com", "");
-    EXPECT_FALSE(model.is_valid(bad_name));
+    EXPECT_FALSE(model.check(bad_name));
 
     StringQObject bad_email("Alice", "notanemail", "");
-    EXPECT_FALSE(model.is_valid(bad_email));
+    EXPECT_FALSE(model.check(bad_email));
 }
 
 // moc needed for StringQObject (Q_OBJECT defined in this translation unit)

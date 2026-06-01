@@ -43,23 +43,14 @@ bool uri_like(QStringView s)
     return ctre::match<pattern>(std::string_view(utf8.data(), utf8.size()));
 }
 
-bool qregex(QStringView s, const QString& pattern)
-{
-    QRegularExpression re(pattern);
-    if(!re.isValid()) {
-        vd::require(false, "Invalid regex pattern: {}", pattern.toStdString());
-        return false;
-    }
-    QRegularExpressionMatch m = re.matchView(s);
-    return m.hasMatch() && m.capturedStart() == 0 && m.capturedLength() == s.size();
-}
 } // namespace vd::qt::string_rules::detail
 
 namespace vd::qt::string_rules
 {
 vd::result qregex_checker::operator()(QStringView s) const
 {
-    bool matched = detail::qregex(s, pattern);
+    QRegularExpressionMatch m = re.matchView(s);
+    bool matched = m.hasMatch() && m.capturedStart() == 0 && m.capturedLength() == s.size();
     bool passes = (match_mode == mode::include) ? matched : !matched;
     if(passes)
         return vd::result::ok();
@@ -71,6 +62,8 @@ vd::result qregex_checker::operator()(QStringView s) const
 
 qregex_checker regex(QString pattern)
 {
-    return { std::move(pattern), qregex_checker::mode::include };
+    QRegularExpression re(pattern);
+    vd::require(re.isValid(), "Invalid regex pattern: {}", pattern.toStdString());
+    return { std::move(re), qregex_checker::mode::include };
 }
 } // namespace vd::qt::string_rules
