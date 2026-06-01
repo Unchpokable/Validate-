@@ -239,7 +239,7 @@ static vd::basic_model<AddressObject> make_address_model(vd::basic_model<CityObj
             }))
         .with(vd::predicate([cm = std::move(city_model)](const AddressObject& a) {
             auto* c = a.city();
-            return c != nullptr && cm.is_valid(*c);
+            return c != nullptr && cm.check(*c);
         }));
 }
 
@@ -261,7 +261,7 @@ static vd::basic_model<UserAccount> make_user_model(vd::basic_model<AddressObjec
             }))
         .with(vd::predicate([am = std::move(addr_model)](const UserAccount& u) {
             auto* a = u.address();
-            return a != nullptr && am.is_valid(*a);
+            return a != nullptr && am.check(*a);
         }));
 }
 
@@ -291,14 +291,14 @@ TEST(QtNestedObjectValidation, ValidCityPassesCityModel)
 {
     auto model = make_city_model();
     CityObject city("Berlin", "10115");
-    EXPECT_TRUE(model.is_valid(city));
+    EXPECT_TRUE(model.check(city));
 }
 
 TEST(QtNestedObjectValidation, EmptyCityNameFailsCityModel)
 {
     auto model = make_city_model();
     CityObject city("", "10115");
-    EXPECT_FALSE(model.is_valid(city));
+    EXPECT_FALSE(model.check(city));
 }
 
 TEST(QtNestedObjectValidation, InvalidZipFailsCityModel)
@@ -307,36 +307,36 @@ TEST(QtNestedObjectValidation, InvalidZipFailsCityModel)
     CityObject alpha("Berlin", "ABC12");  // not all digits
     CityObject short4("Berlin", "1011");  // 4 digits
     CityObject long6("Berlin", "101150"); // 6 digits
-    EXPECT_FALSE(model.is_valid(alpha));
-    EXPECT_FALSE(model.is_valid(short4));
-    EXPECT_FALSE(model.is_valid(long6));
+    EXPECT_FALSE(model.check(alpha));
+    EXPECT_FALSE(model.check(short4));
+    EXPECT_FALSE(model.check(long6));
 }
 
 TEST(QtNestedObjectValidation, ValidAddressWithValidCityPasses)
 {
     CityObject city("Berlin", "10115");
     AddressObject addr("Unter den Linden 1", &city);
-    EXPECT_TRUE(make_address_model(make_city_model()).is_valid(addr));
+    EXPECT_TRUE(make_address_model(make_city_model()).check(addr));
 }
 
 TEST(QtNestedObjectValidation, AddressWithNullCityFails)
 {
     AddressObject addr("Unter den Linden 1", nullptr);
-    EXPECT_FALSE(make_address_model(make_city_model()).is_valid(addr));
+    EXPECT_FALSE(make_address_model(make_city_model()).check(addr));
 }
 
 TEST(QtNestedObjectValidation, AddressWithInvalidCityFails)
 {
     CityObject bad_city("", "10115");
     AddressObject addr("Unter den Linden 1", &bad_city);
-    EXPECT_FALSE(make_address_model(make_city_model()).is_valid(addr));
+    EXPECT_FALSE(make_address_model(make_city_model()).check(addr));
 }
 
 TEST(QtNestedObjectValidation, EmptyStreetFailsAddressModel)
 {
     CityObject city("Berlin", "10115");
     AddressObject addr("", &city);
-    EXPECT_FALSE(make_address_model(make_city_model()).is_valid(addr));
+    EXPECT_FALSE(make_address_model(make_city_model()).check(addr));
 }
 
 TEST(QtNestedObjectValidation, ValidUserAccountWithFullHierarchyPasses)
@@ -344,13 +344,13 @@ TEST(QtNestedObjectValidation, ValidUserAccountWithFullHierarchyPasses)
     CityObject city("Berlin", "10115");
     AddressObject addr("Unter den Linden 1", &city);
     UserAccount user("alice", "alice@example.com", 30, &addr);
-    EXPECT_TRUE(make_user_model(make_address_model(make_city_model())).is_valid(user));
+    EXPECT_TRUE(make_user_model(make_address_model(make_city_model())).check(user));
 }
 
 TEST(QtNestedObjectValidation, UserAccountWithNullAddressFails)
 {
     UserAccount user("alice", "alice@example.com", 30, nullptr);
-    EXPECT_FALSE(make_user_model(make_address_model(make_city_model())).is_valid(user));
+    EXPECT_FALSE(make_user_model(make_address_model(make_city_model())).check(user));
 }
 
 TEST(QtNestedObjectValidation, UserAccountWithInvalidEmailFails)
@@ -358,7 +358,7 @@ TEST(QtNestedObjectValidation, UserAccountWithInvalidEmailFails)
     CityObject city("Berlin", "10115");
     AddressObject addr("Unter den Linden 1", &city);
     UserAccount user("alice", "not-an-email", 30, &addr);
-    EXPECT_FALSE(make_user_model(make_address_model(make_city_model())).is_valid(user));
+    EXPECT_FALSE(make_user_model(make_address_model(make_city_model())).check(user));
 }
 
 TEST(QtNestedObjectValidation, UserAccountUnderageFailsAgeRule)
@@ -366,7 +366,7 @@ TEST(QtNestedObjectValidation, UserAccountUnderageFailsAgeRule)
     CityObject city("Berlin", "10115");
     AddressObject addr("Unter den Linden 1", &city);
     UserAccount user("alice", "alice@example.com", 16, &addr);
-    EXPECT_FALSE(make_user_model(make_address_model(make_city_model())).is_valid(user));
+    EXPECT_FALSE(make_user_model(make_address_model(make_city_model())).check(user));
 }
 
 TEST(QtNestedObjectValidation, UserAccountWithBadZipDeepInChainFails)
@@ -374,7 +374,7 @@ TEST(QtNestedObjectValidation, UserAccountWithBadZipDeepInChainFails)
     CityObject bad_city("Hamburg", "ABCDE"); // zip fails at the deepest level
     AddressObject addr("Jungfernstieg 1", &bad_city);
     UserAccount user("bob", "bob@mail.de", 25, &addr);
-    EXPECT_FALSE(make_user_model(make_address_model(make_city_model())).is_valid(user));
+    EXPECT_FALSE(make_user_model(make_address_model(make_city_model())).check(user));
 }
 
 // ---------------------------------------------------------------------------
@@ -389,7 +389,7 @@ TEST(QtModelClosureCopyCapture, CapturedCityModelValidatesCorrectly)
 
     auto addr_rule = vd::predicate([city_model](const AddressObject& a) {
         auto* c = a.city();
-        return c != nullptr && city_model.is_valid(*c);
+        return c != nullptr && city_model.check(*c);
     });
 
     CityObject good_city("Paris", "75001");
@@ -408,7 +408,7 @@ TEST(QtModelClosureCopyCapture, AddingRuleToOriginalAfterCaptureDoesNotAffectClo
     // Capture a copy — the snapshot has only the two base rules (name + zip).
     auto addr_rule = vd::predicate([snapshot = city_model](const AddressObject& a) {
         auto* c = a.city();
-        return c != nullptr && snapshot.is_valid(*c);
+        return c != nullptr && snapshot.check(*c);
     });
 
     // Add an extra rule to the original that rejects everything except one name.
@@ -420,7 +420,7 @@ TEST(QtModelClosureCopyCapture, AddingRuleToOriginalAfterCaptureDoesNotAffectClo
     AddressObject addr("Street 1", &city);
 
     // Original now rejects "Berlin" due to the extra rule.
-    EXPECT_FALSE(city_model.is_valid(city));
+    EXPECT_FALSE(city_model.check(city));
 
     // The closure captured the old copy — "Berlin" still passes name + zip rules.
     EXPECT_TRUE(addr_rule(addr));
@@ -438,11 +438,11 @@ TEST(QtModelClosureCopyCapture, TwoRulesCaptureIndependentCopies)
 
     auto rule_strict = vd::predicate([city_model_strict](const AddressObject& a) {
         auto* c = a.city();
-        return c != nullptr && city_model_strict.is_valid(*c);
+        return c != nullptr && city_model_strict.check(*c);
     });
     auto rule_normal = vd::predicate([city_model_normal](const AddressObject& a) {
         auto* c = a.city();
-        return c != nullptr && city_model_normal.is_valid(*c);
+        return c != nullptr && city_model_normal.check(*c);
     });
 
     CityObject city("Berlin", "10115");
@@ -458,7 +458,7 @@ TEST(QtModelClosureCopyCapture, CapturedModelSurvivesOuterModelCopyAndMove)
 
     auto addr_model = vd::basic_model<AddressObject> {}.with(vd::predicate([city_model](const AddressObject& a) {
         auto* c = a.city();
-        return c != nullptr && city_model.is_valid(*c);
+        return c != nullptr && city_model.check(*c);
     }));
 
     auto addr_copy = addr_model;            // copy — should carry captured city_model
@@ -467,8 +467,8 @@ TEST(QtModelClosureCopyCapture, CapturedModelSurvivesOuterModelCopyAndMove)
     CityObject city("Berlin", "10115");
     AddressObject addr("Street 1", &city);
 
-    EXPECT_TRUE(addr_model.is_valid(addr)); // original still works
-    EXPECT_TRUE(addr_moved.is_valid(addr)); // moved model carries the closure intact
+    EXPECT_TRUE(addr_model.check(addr)); // original still works
+    EXPECT_TRUE(addr_moved.check(addr)); // moved model carries the closure intact
 }
 
 TEST(QtModelClosureCopyCapture, NestedStringRuleCheckersCapturedInsideClosure)
@@ -491,7 +491,7 @@ TEST(QtModelClosureCopyCapture, NestedStringRuleCheckersCapturedInsideClosure)
     // Now capture city_model itself inside an addr predicate.
     auto addr_rule = vd::predicate([city_model](const AddressObject& a) {
         auto* c = a.city();
-        return c != nullptr && city_model.is_valid(*c);
+        return c != nullptr && city_model.check(*c);
     });
 
     CityObject valid_city("Vienna", "01010");
@@ -517,14 +517,14 @@ TEST(QtModelMoveSemantics, MovedFromModelIsVacuouslyValid)
     // Move city_model into the lambda — source loses all its rules.
     auto rule = vd::predicate([cm = std::move(city_model)](const AddressObject& a) {
         auto* c = a.city();
-        return c != nullptr && cm.is_valid(*c);
+        return c != nullptr && cm.check(*c);
     });
     (void)rule;
 
     // Moved-from model has empty m_rules vector → is_valid() returns true
     // for any non-null object (vacuous truth over empty rule set).
     CityObject all_bad("", "XXXXX");
-    EXPECT_TRUE(city_model.is_valid(all_bad));
+    EXPECT_TRUE(city_model.check(all_bad));
 }
 
 TEST(QtModelMoveSemantics, ClosureReceivingMovedModelEnforcesAllRules)
@@ -533,7 +533,7 @@ TEST(QtModelMoveSemantics, ClosureReceivingMovedModelEnforcesAllRules)
 
     auto rule = vd::predicate([cm = std::move(city_model)](const AddressObject& a) {
         auto* c = a.city();
-        return c != nullptr && cm.is_valid(*c);
+        return c != nullptr && cm.check(*c);
     });
 
     CityObject good("Berlin", "10115");
@@ -561,8 +561,8 @@ TEST(QtModelMoveSemantics, RvalueWithChainBuildsCorrectModel)
 
     CityObject valid("Munich", "80331");
     CityObject bad_zip("Munich", "8033");
-    EXPECT_TRUE(model.is_valid(valid));
-    EXPECT_FALSE(model.is_valid(bad_zip));
+    EXPECT_TRUE(model.check(valid));
+    EXPECT_FALSE(model.check(bad_zip));
 }
 
 TEST(QtModelMoveSemantics, ModelMovedIntoAnotherModelViaRvalueWith)
@@ -581,11 +581,11 @@ TEST(QtModelMoveSemantics, ModelMovedIntoAnotherModelViaRvalueWith)
     CityObject city("Munich", "80331");
     CityObject bad_zip("Munich", "803");
 
-    EXPECT_TRUE(base.is_valid(city));     // vacuous: base is empty
-    EXPECT_TRUE(base.is_valid(bad_zip));  // vacuous: base is empty
+    EXPECT_TRUE(base.check(city));     // vacuous: base is empty
+    EXPECT_TRUE(base.check(bad_zip));  // vacuous: base is empty
 
-    EXPECT_TRUE(extended.is_valid(city)); // both rules present
-    EXPECT_FALSE(extended.is_valid(bad_zip));
+    EXPECT_TRUE(extended.check(city)); // both rules present
+    EXPECT_FALSE(extended.check(bad_zip));
 }
 
 TEST(QtModelMoveSemantics, ThreeLevelChainBuiltWithMovesValidatesCorrectly)
@@ -600,12 +600,12 @@ TEST(QtModelMoveSemantics, ThreeLevelChainBuiltWithMovesValidatesCorrectly)
     CityObject good_city("Hamburg", "20095");
     AddressObject good_addr("Jungfernstieg 1", &good_city);
     UserAccount good_user("bob", "bob@mail.de", 25, &good_addr);
-    EXPECT_TRUE(user_model.is_valid(good_user));
+    EXPECT_TRUE(user_model.check(good_user));
 
     CityObject bad_city("Hamburg", "ABCDE"); // zip fails at the deepest level
     AddressObject bad_addr("Jungfernstieg 1", &bad_city);
     UserAccount bad_user("bob", "bob@mail.de", 25, &bad_addr);
-    EXPECT_FALSE(user_model.is_valid(bad_user));
+    EXPECT_FALSE(user_model.check(bad_user));
 }
 
 // ---------------------------------------------------------------------------
@@ -623,13 +623,13 @@ TEST(QtBoundModelMutation, BoundModelReflectsTtlMutationImmediately)
     session.setUserId("user_42");
 
     auto bound = model.bind(session);
-    EXPECT_TRUE(bound.is_valid());
+    EXPECT_TRUE(bound.check());
 
     session.setTtl(-1); // session expired
-    EXPECT_FALSE(bound.is_valid());
+    EXPECT_FALSE(bound.check());
 
     session.setTtl(900); // refreshed
-    EXPECT_TRUE(bound.is_valid());
+    EXPECT_TRUE(bound.check());
 }
 
 TEST(QtBoundModelMutation, BoundModelReflectsTokenRevocation)
@@ -641,10 +641,10 @@ TEST(QtBoundModelMutation, BoundModelReflectsTokenRevocation)
     session.setUserId("user_1");
 
     auto bound = model.bind(session);
-    EXPECT_TRUE(bound.is_valid());
+    EXPECT_TRUE(bound.check());
 
     session.setToken(""); // token revoked
-    EXPECT_FALSE(bound.is_valid());
+    EXPECT_FALSE(bound.check());
 }
 
 TEST(QtBoundModelMutation, BoundModelTracksEachPropertyIndependently)
@@ -659,21 +659,21 @@ TEST(QtBoundModelMutation, BoundModelTracksEachPropertyIndependently)
 
     // Break and restore userId
     session.setUserId("");
-    EXPECT_FALSE(bound.is_valid());
+    EXPECT_FALSE(bound.check());
     session.setUserId("u1");
-    EXPECT_TRUE(bound.is_valid());
+    EXPECT_TRUE(bound.check());
 
     // Break and restore token
     session.setToken("");
-    EXPECT_FALSE(bound.is_valid());
+    EXPECT_FALSE(bound.check());
     session.setToken("tok");
-    EXPECT_TRUE(bound.is_valid());
+    EXPECT_TRUE(bound.check());
 
     // Break and restore ttl
     session.setTtl(0);
-    EXPECT_FALSE(bound.is_valid());
+    EXPECT_FALSE(bound.check());
     session.setTtl(100);
-    EXPECT_TRUE(bound.is_valid());
+    EXPECT_TRUE(bound.check());
 }
 
 TEST(QtBoundModelMutation, TwoBoundInstancesOnSameObjectAreIndependent)
@@ -695,13 +695,13 @@ TEST(QtBoundModelMutation, TwoBoundInstancesOnSameObjectAreIndependent)
     auto bound_ttl = model_ttl.bind(session);
 
     session.setToken(""); // violates model_token only
-    EXPECT_FALSE(bound_token.is_valid());
-    EXPECT_TRUE(bound_ttl.is_valid());
+    EXPECT_FALSE(bound_token.check());
+    EXPECT_TRUE(bound_ttl.check());
 
     session.setToken("tok");
     session.setTtl(0); // violates model_ttl only
-    EXPECT_TRUE(bound_token.is_valid());
-    EXPECT_FALSE(bound_ttl.is_valid());
+    EXPECT_TRUE(bound_token.check());
+    EXPECT_FALSE(bound_ttl.check());
 }
 
 TEST(QtBoundModelMutation, BoundModelWithNestedClosureSeesOuterMutation)
@@ -718,7 +718,7 @@ TEST(QtBoundModelMutation, BoundModelWithNestedClosureSeesOuterMutation)
                                    return !s.isEmpty();
                                }))
                            .with(vd::predicate([inner_model](const MutableSession& s) {
-                               return inner_model.is_valid(s);
+                               return inner_model.check(s);
                            }));
 
     MutableSession session;
@@ -727,10 +727,10 @@ TEST(QtBoundModelMutation, BoundModelWithNestedClosureSeesOuterMutation)
     session.setUserId("u");
 
     auto bound = outer_model.bind(session);
-    EXPECT_TRUE(bound.is_valid());
+    EXPECT_TRUE(bound.check());
 
     session.setTtl(-1); // inner model rejects this
-    EXPECT_FALSE(bound.is_valid());
+    EXPECT_FALSE(bound.check());
 }
 
 // ---------------------------------------------------------------------------
@@ -824,14 +824,14 @@ TEST(QtModelCompositionWithQtRules, BaseAndExtensionComposedEnforceAllRules)
     s.setToken("tok");
     s.setTtl(100);
     s.setUserId("u");
-    EXPECT_TRUE(extended.is_valid(s));
+    EXPECT_TRUE(extended.check(s));
 
     s.setToken(""); // violates base rule
-    EXPECT_FALSE(extended.is_valid(s));
+    EXPECT_FALSE(extended.check(s));
 
     s.setToken("tok");
     s.setTtl(0); // violates extended rule
-    EXPECT_FALSE(extended.is_valid(s));
+    EXPECT_FALSE(extended.check(s));
 }
 
 TEST(QtModelCompositionWithQtRules, TwoSeparateModelsComposed)
@@ -855,16 +855,16 @@ TEST(QtModelCompositionWithQtRules, TwoSeparateModelsComposed)
     s.setToken("tok");
     s.setUserId("u");
     s.setTtl(100);
-    EXPECT_TRUE(composed.is_valid(s));
+    EXPECT_TRUE(composed.check(s));
 
     s.setToken("");
-    EXPECT_FALSE(composed.is_valid(s));
+    EXPECT_FALSE(composed.check(s));
     s.setToken("tok");
     s.setUserId("");
-    EXPECT_FALSE(composed.is_valid(s));
+    EXPECT_FALSE(composed.check(s));
     s.setUserId("u");
     s.setTtl(-1);
-    EXPECT_FALSE(composed.is_valid(s));
+    EXPECT_FALSE(composed.check(s));
 }
 
 TEST(QtModelCompositionWithQtRules, RvalueWithMergesModelsCorrectly)
@@ -883,8 +883,8 @@ TEST(QtModelCompositionWithQtRules, RvalueWithMergesModelsCorrectly)
 
     CityObject valid("Hamburg", "20095");
     CityObject bad_zip("Hamburg", "2009X");
-    EXPECT_TRUE(full.is_valid(valid));
-    EXPECT_FALSE(full.is_valid(bad_zip));
+    EXPECT_TRUE(full.check(valid));
+    EXPECT_FALSE(full.check(bad_zip));
 }
 
 TEST(QtModelCompositionWithQtRules, EmptyModelComposedWithRuledModel)
@@ -898,8 +898,8 @@ TEST(QtModelCompositionWithQtRules, EmptyModelComposedWithRuledModel)
 
     CityObject good("Berlin", "10115");
     CityObject bad("", "10115");
-    EXPECT_TRUE(composed.is_valid(good));
-    EXPECT_FALSE(composed.is_valid(bad));
+    EXPECT_TRUE(composed.check(good));
+    EXPECT_FALSE(composed.check(bad));
 }
 
 TEST(QtModelCompositionWithQtRules, InitializerListOfQtPropertyRules)
@@ -919,8 +919,8 @@ TEST(QtModelCompositionWithQtRules, InitializerListOfQtPropertyRules)
 
     CityObject valid("Munich", "80331");
     CityObject bad_zip("Munich", "803");
-    EXPECT_TRUE(model.is_valid(valid));
-    EXPECT_FALSE(model.is_valid(bad_zip));
+    EXPECT_TRUE(model.check(valid));
+    EXPECT_FALSE(model.check(bad_zip));
 }
 
 // ---------------------------------------------------------------------------
@@ -938,8 +938,8 @@ TEST(QtFieldFactoryWithQObjectGetters, FieldWithNonEmptyStringRuleOnQObject)
 
     UserAccount valid("alice", "", 30, &addr);
     UserAccount invalid("", "", 30, &addr);
-    EXPECT_TRUE(model.is_valid(valid));
-    EXPECT_FALSE(model.is_valid(invalid));
+    EXPECT_TRUE(model.check(valid));
+    EXPECT_FALSE(model.check(invalid));
 }
 
 TEST(QtFieldFactoryWithQObjectGetters, FieldWithEmailLikeCheckerViaLambda)
@@ -954,8 +954,8 @@ TEST(QtFieldFactoryWithQObjectGetters, FieldWithEmailLikeCheckerViaLambda)
 
     UserAccount valid("u", "user@example.com", 30, &addr);
     UserAccount invalid("u", "notanemail", 30, &addr);
-    EXPECT_TRUE(model.is_valid(valid));
-    EXPECT_FALSE(model.is_valid(invalid));
+    EXPECT_TRUE(model.check(valid));
+    EXPECT_FALSE(model.check(invalid));
 }
 
 TEST(QtFieldFactoryWithQObjectGetters, FieldWithAgeLambda)
@@ -970,9 +970,9 @@ TEST(QtFieldFactoryWithQObjectGetters, FieldWithAgeLambda)
     UserAccount adult("u", "u@u.com", 21, &addr);
     UserAccount teen("u", "u@u.com", 16, &addr);
     UserAccount elder("u", "u@u.com", 121, &addr);
-    EXPECT_TRUE(model.is_valid(adult));
-    EXPECT_FALSE(model.is_valid(teen));
-    EXPECT_FALSE(model.is_valid(elder));
+    EXPECT_TRUE(model.check(adult));
+    EXPECT_FALSE(model.check(teen));
+    EXPECT_FALSE(model.check(elder));
 }
 
 TEST(QtFieldFactoryWithQObjectGetters, FieldAndQtPropertyCoexistInSameModel)
@@ -990,13 +990,13 @@ TEST(QtFieldFactoryWithQObjectGetters, FieldAndQtPropertyCoexistInSameModel)
     AddressObject addr("Street 1", &city);
 
     UserAccount both_valid("alice", "alice@mail.com", 25, &addr);
-    EXPECT_TRUE(model.is_valid(both_valid));
+    EXPECT_TRUE(model.check(both_valid));
 
     UserAccount bad_name("", "alice@mail.com", 25, &addr);
-    EXPECT_FALSE(model.is_valid(bad_name));
+    EXPECT_FALSE(model.check(bad_name));
 
     UserAccount bad_email("alice", "notanemail", 25, &addr);
-    EXPECT_FALSE(model.is_valid(bad_email));
+    EXPECT_FALSE(model.check(bad_email));
 }
 
 TEST(QtFieldFactoryWithQObjectGetters, FieldWithRegexCheckerOnCityZip)
@@ -1008,8 +1008,8 @@ TEST(QtFieldFactoryWithQObjectGetters, FieldWithRegexCheckerOnCityZip)
 
     CityObject valid("Berlin", "10115");
     CityObject invalid("Berlin", "1011X");
-    EXPECT_TRUE(model.is_valid(valid));
-    EXPECT_FALSE(model.is_valid(invalid));
+    EXPECT_TRUE(model.check(valid));
+    EXPECT_FALSE(model.check(invalid));
 }
 
 TEST(QtFieldFactoryWithQObjectGetters, FieldCoverage_AllCityFieldsViaGetterPointers)
@@ -1022,9 +1022,9 @@ TEST(QtFieldFactoryWithQObjectGetters, FieldCoverage_AllCityFieldsViaGetterPoint
     CityObject valid("Berlin", "10115");
     CityObject no_name("", "10115");
     CityObject no_zip("Berlin", "");
-    EXPECT_TRUE(model.is_valid(valid));
-    EXPECT_FALSE(model.is_valid(no_name));
-    EXPECT_FALSE(model.is_valid(no_zip));
+    EXPECT_TRUE(model.check(valid));
+    EXPECT_FALSE(model.check(no_name));
+    EXPECT_FALSE(model.check(no_zip));
 }
 
 // ---------------------------------------------------------------------------
@@ -1063,56 +1063,56 @@ TEST(QtComplexApiRequestValidation, FullyValidRequestPasses)
 {
     auto model = make_api_request_model();
     ApiRequestObject req("https://api.example.com/v1/users", "GET", 5000, "Bearer tok123", 100.0);
-    EXPECT_TRUE(model.is_valid(req));
+    EXPECT_TRUE(model.check(req));
 }
 
 TEST(QtComplexApiRequestValidation, InvalidEndpointFails)
 {
     auto model = make_api_request_model();
     ApiRequestObject req("api.example.com", "GET", 5000, "tok", 100.0); // no scheme
-    EXPECT_FALSE(model.is_valid(req));
+    EXPECT_FALSE(model.check(req));
 }
 
 TEST(QtComplexApiRequestValidation, InvalidHttpMethodFails)
 {
     auto model = make_api_request_model();
     ApiRequestObject req("https://api.example.com/ep", "QUERY", 5000, "tok", 100.0);
-    EXPECT_FALSE(model.is_valid(req));
+    EXPECT_FALSE(model.check(req));
 }
 
 TEST(QtComplexApiRequestValidation, ZeroTimeoutFails)
 {
     auto model = make_api_request_model();
     ApiRequestObject req("https://api.example.com/ep", "POST", 0, "tok", 100.0);
-    EXPECT_FALSE(model.is_valid(req));
+    EXPECT_FALSE(model.check(req));
 }
 
 TEST(QtComplexApiRequestValidation, ExcessiveTimeoutFails)
 {
     auto model = make_api_request_model();
     ApiRequestObject req("https://api.example.com/ep", "POST", 30001, "tok", 100.0);
-    EXPECT_FALSE(model.is_valid(req));
+    EXPECT_FALSE(model.check(req));
 }
 
 TEST(QtComplexApiRequestValidation, EmptyAuthTokenFails)
 {
     auto model = make_api_request_model();
     ApiRequestObject req("https://api.example.com/ep", "DELETE", 5000, "", 100.0);
-    EXPECT_FALSE(model.is_valid(req));
+    EXPECT_FALSE(model.check(req));
 }
 
 TEST(QtComplexApiRequestValidation, RateLimitAtZeroFails)
 {
     auto model = make_api_request_model();
     ApiRequestObject req("https://api.example.com/ep", "PUT", 5000, "tok", 0.0);
-    EXPECT_FALSE(model.is_valid(req));
+    EXPECT_FALSE(model.check(req));
 }
 
 TEST(QtComplexApiRequestValidation, RateLimitExceededFails)
 {
     auto model = make_api_request_model();
     ApiRequestObject req("https://api.example.com/ep", "PUT", 5000, "tok", 1001.0);
-    EXPECT_FALSE(model.is_valid(req));
+    EXPECT_FALSE(model.check(req));
 }
 
 TEST(QtComplexApiRequestValidation, ModelIsReusableAcrossMultipleRequests)
@@ -1125,11 +1125,11 @@ TEST(QtComplexApiRequestValidation, ModelIsReusableAcrossMultipleRequests)
     ApiRequestObject r4("not-a-url", "GET", 1000, "tok4", 50.0);
     ApiRequestObject r5("https://api.example.com/d", "BREW", 1000, "tok5", 50.0);
 
-    EXPECT_TRUE(model.is_valid(r1));
-    EXPECT_TRUE(model.is_valid(r2));
-    EXPECT_TRUE(model.is_valid(r3));
-    EXPECT_FALSE(model.is_valid(r4)); // bad endpoint
-    EXPECT_FALSE(model.is_valid(r5)); // BREW is not a valid HTTP method
+    EXPECT_TRUE(model.check(r1));
+    EXPECT_TRUE(model.check(r2));
+    EXPECT_TRUE(model.check(r3));
+    EXPECT_FALSE(model.check(r4)); // bad endpoint
+    EXPECT_FALSE(model.check(r5)); // BREW is not a valid HTTP method
 }
 
 // ---------------------------------------------------------------------------
@@ -1146,7 +1146,7 @@ TEST(QtModelCopySafety, CopyModelWithPlainPredicateAndCall)
     }));
     auto m2 = m;
     CityObject city("Berlin", "10115");
-    EXPECT_TRUE(m2.is_valid(city));
+    EXPECT_TRUE(m2.check(city));
 }
 
 TEST(QtModelCopySafety, CopyModelWithFieldFactoryAndCall)
@@ -1154,7 +1154,7 @@ TEST(QtModelCopySafety, CopyModelWithFieldFactoryAndCall)
     auto m = vd::basic_model<CityObject> {}.with(vd::field(&CityObject::name, vd::qt::string_rules::non_empty()));
     auto m2 = m;
     CityObject city("Berlin", "10115");
-    EXPECT_TRUE(m2.is_valid(city));
+    EXPECT_TRUE(m2.check(city));
 }
 
 TEST(QtModelCopySafety, CopyQtPropertyModelAndCall)
@@ -1164,7 +1164,7 @@ TEST(QtModelCopySafety, CopyQtPropertyModelAndCall)
     }));
     auto m2 = m;
     CityObject city("Berlin", "10115");
-    EXPECT_TRUE(m2.is_valid(city));
+    EXPECT_TRUE(m2.check(city));
 }
 
 // ---------------------------------------------------------------------------
@@ -1331,7 +1331,7 @@ static vd::basic_model<EmployeeObject> make_employee_model_via_typed_ptr(vd::bas
                 return !s.isEmpty();
             }))
         .with(vd::qt::qt_property<EmployeeObject>("department", [dm = std::move(dept_model)](DepartmentObject* d) {
-            return d != nullptr && dm.is_valid(*d);
+            return d != nullptr && dm.check(*d);
         }));
 }
 
@@ -1353,7 +1353,7 @@ static vd::basic_model<EmployeeObject> make_employee_model_via_qobject_ptr(vd::b
             }))
         .with(vd::qt::qt_property<EmployeeObject>("department", [dm = std::move(dept_model)](QObject* d) {
             auto* dept = qobject_cast<DepartmentObject*>(d);
-            return dept != nullptr && dm.is_valid(*dept);
+            return dept != nullptr && dm.check(*dept);
         }));
 }
 
@@ -1372,7 +1372,7 @@ static vd::basic_model<EmployeeObject> make_employee_model_via_predicate(vd::bas
             }))
         .with(vd::predicate([dm = std::move(dept_model)](const EmployeeObject& e) {
             auto* dept = e.department();
-            return dept != nullptr && dm.is_valid(*dept);
+            return dept != nullptr && dm.check(*dept);
         }));
 }
 
@@ -1387,10 +1387,10 @@ static vd::basic_model<ProjectObject> make_project_model(
             }))
         .with(vd::qt::qt_property<ProjectObject>("lead",
             [em = std::move(emp_model)](EmployeeObject* e) {
-                return e != nullptr && em.is_valid(*e);
+                return e != nullptr && em.check(*e);
             }))
         .with(vd::qt::qt_property<ProjectObject>("owner_dept", [dm = std::move(dept_model)](DepartmentObject* d) {
-            return d != nullptr && dm.is_valid(*d);
+            return d != nullptr && dm.check(*d);
         }));
 }
 
@@ -1413,7 +1413,7 @@ TEST(QtQObjectPointerPropertyValidation, TypedPtrCheckerValidEmployeePasses)
     auto model = make_employee_model_via_typed_ptr(make_department_model());
     DepartmentObject dept("Engineering", 42);
     EmployeeObject emp("Alice", "Engineer", &dept);
-    EXPECT_TRUE(model.is_valid(emp));
+    EXPECT_TRUE(model.check(emp));
 }
 
 TEST(QtQObjectPointerPropertyValidation, TypedPtrCheckerNullDeptFails)
@@ -1421,7 +1421,7 @@ TEST(QtQObjectPointerPropertyValidation, TypedPtrCheckerNullDeptFails)
     // Checker receives nullptr from the QVariant; the model must reject it.
     auto model = make_employee_model_via_typed_ptr(make_department_model());
     EmployeeObject emp("Alice", "Engineer", nullptr);
-    EXPECT_FALSE(model.is_valid(emp));
+    EXPECT_FALSE(model.check(emp));
 }
 
 TEST(QtQObjectPointerPropertyValidation, TypedPtrCheckerInvalidDeptFails)
@@ -1430,11 +1430,11 @@ TEST(QtQObjectPointerPropertyValidation, TypedPtrCheckerInvalidDeptFails)
 
     DepartmentObject empty_name("", 5); // name rule fails
     EmployeeObject emp1("Bob", "Manager", &empty_name);
-    EXPECT_FALSE(model.is_valid(emp1));
+    EXPECT_FALSE(model.check(emp1));
 
     DepartmentObject zero_hc("HR", 0); // headcount rule fails
     EmployeeObject emp2("Bob", "Manager", &zero_hc);
-    EXPECT_FALSE(model.is_valid(emp2));
+    EXPECT_FALSE(model.check(emp2));
 }
 
 TEST(QtQObjectPointerPropertyValidation, TypedPtrCheckerEmptyEmployeeNameFails)
@@ -1442,7 +1442,7 @@ TEST(QtQObjectPointerPropertyValidation, TypedPtrCheckerEmptyEmployeeNameFails)
     auto model = make_employee_model_via_typed_ptr(make_department_model());
     DepartmentObject dept("Engineering", 10);
     EmployeeObject emp("", "Dev", &dept); // employee name rule fails
-    EXPECT_FALSE(model.is_valid(emp));
+    EXPECT_FALSE(model.check(emp));
 }
 
 TEST(QtQObjectPointerPropertyValidation, TypedPtrAndPredicateApproachesAgreeOnValidEmployee)
@@ -1450,16 +1450,16 @@ TEST(QtQObjectPointerPropertyValidation, TypedPtrAndPredicateApproachesAgreeOnVa
     DepartmentObject dept("Engineering", 10);
     EmployeeObject emp("Dave", "Dev", &dept);
 
-    EXPECT_TRUE(make_employee_model_via_typed_ptr(make_department_model()).is_valid(emp));
-    EXPECT_TRUE(make_employee_model_via_predicate(make_department_model()).is_valid(emp));
+    EXPECT_TRUE(make_employee_model_via_typed_ptr(make_department_model()).check(emp));
+    EXPECT_TRUE(make_employee_model_via_predicate(make_department_model()).check(emp));
 }
 
 TEST(QtQObjectPointerPropertyValidation, TypedPtrAndPredicateApproachesAgreeOnNullDept)
 {
     EmployeeObject emp("Dave", "Dev", nullptr);
 
-    EXPECT_FALSE(make_employee_model_via_typed_ptr(make_department_model()).is_valid(emp));
-    EXPECT_FALSE(make_employee_model_via_predicate(make_department_model()).is_valid(emp));
+    EXPECT_FALSE(make_employee_model_via_typed_ptr(make_department_model()).check(emp));
+    EXPECT_FALSE(make_employee_model_via_predicate(make_department_model()).check(emp));
 }
 
 TEST(QtQObjectPointerPropertyValidation, TypedPtrAndPredicateApproachesAgreeOnInvalidDept)
@@ -1467,8 +1467,8 @@ TEST(QtQObjectPointerPropertyValidation, TypedPtrAndPredicateApproachesAgreeOnIn
     DepartmentObject bad("", 0);
     EmployeeObject emp("Dave", "Dev", &bad);
 
-    EXPECT_FALSE(make_employee_model_via_typed_ptr(make_department_model()).is_valid(emp));
-    EXPECT_FALSE(make_employee_model_via_predicate(make_department_model()).is_valid(emp));
+    EXPECT_FALSE(make_employee_model_via_typed_ptr(make_department_model()).check(emp));
+    EXPECT_FALSE(make_employee_model_via_predicate(make_department_model()).check(emp));
 }
 
 TEST(QtQObjectPointerPropertyValidation, HybridModelScalarQtPropertyAndPointerPredicate)
@@ -1487,21 +1487,21 @@ TEST(QtQObjectPointerPropertyValidation, HybridModelScalarQtPropertyAndPointerPr
                          }))
                      .with(vd::predicate([dm = std::move(dept_model)](const EmployeeObject& e) {
                          auto* d = e.department();
-                         return d != nullptr && dm.is_valid(*d);
+                         return d != nullptr && dm.check(*d);
                      }));
 
     DepartmentObject valid_dept("Sales", 5);
     EmployeeObject valid("Eve", "Lead", &valid_dept);
-    EXPECT_TRUE(model.is_valid(valid));
+    EXPECT_TRUE(model.check(valid));
 
     EmployeeObject bad_name("", "Lead", &valid_dept);
-    EXPECT_FALSE(model.is_valid(bad_name));
+    EXPECT_FALSE(model.check(bad_name));
 
     EmployeeObject bad_role("Eve", "", &valid_dept);
-    EXPECT_FALSE(model.is_valid(bad_role));
+    EXPECT_FALSE(model.check(bad_role));
 
     EmployeeObject null_dept("Eve", "Lead", nullptr);
-    EXPECT_FALSE(model.is_valid(null_dept));
+    EXPECT_FALSE(model.check(null_dept));
 }
 
 TEST(QtQObjectPointerPropertyValidation, BoundMutableEmployeeReflectsDepartmentSwap)
@@ -1514,7 +1514,7 @@ TEST(QtQObjectPointerPropertyValidation, BoundMutableEmployeeReflectsDepartmentS
                              return !s.isEmpty();
                          }))
                      .with(vd::qt::qt_property<MutableEmployee>("department", [dm = make_department_model()](DepartmentObject* d) {
-                         return d != nullptr && dm.is_valid(*d);
+                         return d != nullptr && dm.check(*d);
                      }));
 
     DepartmentObject good("Engineering", 10);
@@ -1525,16 +1525,16 @@ TEST(QtQObjectPointerPropertyValidation, BoundMutableEmployeeReflectsDepartmentS
     emp.setDepartment(&good);
 
     auto bound = model.bind(emp);
-    EXPECT_TRUE(bound.is_valid());
+    EXPECT_TRUE(bound.check());
 
     emp.setDepartment(&bad);
-    EXPECT_FALSE(bound.is_valid());
+    EXPECT_FALSE(bound.check());
 
     emp.setDepartment(&good);
-    EXPECT_TRUE(bound.is_valid());
+    EXPECT_TRUE(bound.check());
 
     emp.setDepartment(nullptr);
-    EXPECT_FALSE(bound.is_valid());
+    EXPECT_FALSE(bound.check());
 }
 
 TEST(QtQObjectPointerPropertyValidation, DeadCheckThrowsWhenPointerPropertyInvalid)
@@ -1558,14 +1558,14 @@ TEST(QtQObjectPointerPropertyValidation, QObjectPtrCheckerValidEmployeePasses)
     auto model = make_employee_model_via_qobject_ptr(make_department_model());
     DepartmentObject dept("Engineering", 42);
     EmployeeObject emp("Alice", "Engineer", &dept);
-    EXPECT_TRUE(model.is_valid(emp));
+    EXPECT_TRUE(model.check(emp));
 }
 
 TEST(QtQObjectPointerPropertyValidation, QObjectPtrCheckerNullDeptFails)
 {
     auto model = make_employee_model_via_qobject_ptr(make_department_model());
     EmployeeObject emp("Alice", "Engineer", nullptr);
-    EXPECT_FALSE(model.is_valid(emp));
+    EXPECT_FALSE(model.check(emp));
 }
 
 TEST(QtQObjectPointerPropertyValidation, AllThreeApproachesAgreeOnValidEmployee)
@@ -1573,18 +1573,18 @@ TEST(QtQObjectPointerPropertyValidation, AllThreeApproachesAgreeOnValidEmployee)
     DepartmentObject dept("Engineering", 10);
     EmployeeObject emp("Dave", "Dev", &dept);
 
-    EXPECT_TRUE(make_employee_model_via_typed_ptr(make_department_model()).is_valid(emp));
-    EXPECT_TRUE(make_employee_model_via_qobject_ptr(make_department_model()).is_valid(emp));
-    EXPECT_TRUE(make_employee_model_via_predicate(make_department_model()).is_valid(emp));
+    EXPECT_TRUE(make_employee_model_via_typed_ptr(make_department_model()).check(emp));
+    EXPECT_TRUE(make_employee_model_via_qobject_ptr(make_department_model()).check(emp));
+    EXPECT_TRUE(make_employee_model_via_predicate(make_department_model()).check(emp));
 }
 
 TEST(QtQObjectPointerPropertyValidation, AllThreeApproachesAgreeOnNullDept)
 {
     EmployeeObject emp("Dave", "Dev", nullptr);
 
-    EXPECT_FALSE(make_employee_model_via_typed_ptr(make_department_model()).is_valid(emp));
-    EXPECT_FALSE(make_employee_model_via_qobject_ptr(make_department_model()).is_valid(emp));
-    EXPECT_FALSE(make_employee_model_via_predicate(make_department_model()).is_valid(emp));
+    EXPECT_FALSE(make_employee_model_via_typed_ptr(make_department_model()).check(emp));
+    EXPECT_FALSE(make_employee_model_via_qobject_ptr(make_department_model()).check(emp));
+    EXPECT_FALSE(make_employee_model_via_predicate(make_department_model()).check(emp));
 }
 
 TEST(QtQObjectPointerPropertyValidation, AllThreeApproachesAgreeOnInvalidDept)
@@ -1592,9 +1592,9 @@ TEST(QtQObjectPointerPropertyValidation, AllThreeApproachesAgreeOnInvalidDept)
     DepartmentObject bad("", 0);
     EmployeeObject emp("Dave", "Dev", &bad);
 
-    EXPECT_FALSE(make_employee_model_via_typed_ptr(make_department_model()).is_valid(emp));
-    EXPECT_FALSE(make_employee_model_via_qobject_ptr(make_department_model()).is_valid(emp));
-    EXPECT_FALSE(make_employee_model_via_predicate(make_department_model()).is_valid(emp));
+    EXPECT_FALSE(make_employee_model_via_typed_ptr(make_department_model()).check(emp));
+    EXPECT_FALSE(make_employee_model_via_qobject_ptr(make_department_model()).check(emp));
+    EXPECT_FALSE(make_employee_model_via_predicate(make_department_model()).check(emp));
 }
 
 // ---------------------------------------------------------------------------
@@ -1624,7 +1624,7 @@ TEST(QtQObjectPointerPropertyChaining, FullyValidProjectPasses)
     ProjectObject project("Atlas", &lead, &dept);
 
     auto model = make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
-    EXPECT_TRUE(model.is_valid(project));
+    EXPECT_TRUE(model.check(project));
 }
 
 TEST(QtQObjectPointerPropertyChaining, NullLeadFails)
@@ -1633,7 +1633,7 @@ TEST(QtQObjectPointerPropertyChaining, NullLeadFails)
     ProjectObject project("Atlas", nullptr, &dept);
 
     auto model = make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
-    EXPECT_FALSE(model.is_valid(project));
+    EXPECT_FALSE(model.check(project));
 }
 
 TEST(QtQObjectPointerPropertyChaining, NullOwnerDeptFails)
@@ -1643,7 +1643,7 @@ TEST(QtQObjectPointerPropertyChaining, NullOwnerDeptFails)
     ProjectObject project("Atlas", &lead, nullptr);
 
     auto model = make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
-    EXPECT_FALSE(model.is_valid(project));
+    EXPECT_FALSE(model.check(project));
 }
 
 TEST(QtQObjectPointerPropertyChaining, EmptyProjectTitleFails)
@@ -1653,7 +1653,7 @@ TEST(QtQObjectPointerPropertyChaining, EmptyProjectTitleFails)
     ProjectObject project("", &lead, &dept); // title rule fails
 
     auto model = make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
-    EXPECT_FALSE(model.is_valid(project));
+    EXPECT_FALSE(model.check(project));
 }
 
 TEST(QtQObjectPointerPropertyChaining, BadDeptDeepInLeadChainFails)
@@ -1665,7 +1665,7 @@ TEST(QtQObjectPointerPropertyChaining, BadDeptDeepInLeadChainFails)
     ProjectObject project("Atlas", &lead, &owner_dept);
 
     auto model = make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
-    EXPECT_FALSE(model.is_valid(project));
+    EXPECT_FALSE(model.check(project));
 }
 
 TEST(QtQObjectPointerPropertyChaining, LeadAndOwnerDeptValidatedIndependently)
@@ -1685,8 +1685,8 @@ TEST(QtQObjectPointerPropertyChaining, LeadAndOwnerDeptValidatedIndependently)
         return make_project_model(make_employee_model_via_typed_ptr(make_department_model()), make_department_model());
     };
 
-    EXPECT_FALSE(make_model().is_valid(p_bad_owner));
-    EXPECT_FALSE(make_model().is_valid(p_bad_lead));
+    EXPECT_FALSE(make_model().check(p_bad_owner));
+    EXPECT_FALSE(make_model().check(p_bad_lead));
 }
 
 TEST(QtQObjectPointerPropertyChaining, ThreeLevelDeadCheckThrowsOnDeepFailure)
@@ -1710,15 +1710,15 @@ TEST(QtQObjectPointerPropertyChaining, CopiedProjectModelIsIndependentOfOriginal
     EmployeeObject lead("Grace", "PM", &dept);
     ProjectObject valid("Atlas", &lead, &dept);
 
-    EXPECT_TRUE(model.is_valid(valid));
-    EXPECT_TRUE(copy.is_valid(valid));
+    EXPECT_TRUE(model.check(valid));
+    EXPECT_TRUE(copy.check(valid));
 
     // Extra rule on the original that rejects everything.
     model.add_rule(vd::rule<ProjectObject>([](const ProjectObject&) {
         return false;
     }));
-    EXPECT_FALSE(model.is_valid(valid));
-    EXPECT_TRUE(copy.is_valid(valid)); // copy is unaffected
+    EXPECT_FALSE(model.check(valid));
+    EXPECT_TRUE(copy.check(valid)); // copy is unaffected
 }
 
 TEST(QtQObjectPointerPropertyChaining, ProjectModelBuiltWithRvalueChainValidatesCorrectly)
@@ -1739,14 +1739,14 @@ TEST(QtQObjectPointerPropertyChaining, ProjectModelBuiltWithRvalueChainValidates
                          }))
                      .with(vd::qt::qt_property<ProjectObject>("lead",
                          [em = make_employee_model_via_typed_ptr(std::move(dept_model_a))](EmployeeObject* e) {
-                             return e != nullptr && em.is_valid(*e);
+                             return e != nullptr && em.check(*e);
                          }))
                      .with(vd::qt::qt_property<ProjectObject>("owner_dept", [dm = std::move(dept_model_b)](DepartmentObject* d) {
-                         return d != nullptr && dm.is_valid(*d);
+                         return d != nullptr && dm.check(*d);
                      }));
 
-    EXPECT_TRUE(model.is_valid(valid));
-    EXPECT_FALSE(model.is_valid(bad_title));
+    EXPECT_TRUE(model.check(valid));
+    EXPECT_FALSE(model.check(bad_title));
 }
 
 // ---------------------------------------------------------------------------
@@ -1774,7 +1774,7 @@ TEST(QtResultApiInspection, ValidQtModel_Result_IsValidAndEmptyFailedRules)
     session.setTtl(3600);
     session.setUserId("user_1");
 
-    auto r = model.is_valid(session);
+    auto r = model.check(session);
     EXPECT_TRUE(r.is_valid);
     EXPECT_TRUE(r.failed_rules.empty());
     EXPECT_TRUE(static_cast<bool>(r));
@@ -1788,7 +1788,7 @@ TEST(QtResultApiInspection, FailingQtPropertyWithBoolChecker_ResultIsInvalid_Ope
     session.setTtl(3600);
     session.setUserId("user_1");
 
-    auto r = model.is_valid(session);
+    auto r = model.check(session);
     EXPECT_FALSE(r.is_valid);
     EXPECT_FALSE(static_cast<bool>(r));
 }
@@ -1804,7 +1804,7 @@ TEST(QtResultApiInspection, FailingQtPropertyWithBoolChecker_FailedRulesContains
     MutableSession session;
     session.setToken(""); // fails
 
-    auto r = model.is_valid(session);
+    auto r = model.check(session);
     EXPECT_FALSE(r);
     ASSERT_EQ(r.failed_rules.size(), 1u);
     EXPECT_NE(r.failed_rules[0].find("token"), std::string::npos);
@@ -1820,7 +1820,7 @@ TEST(QtResultApiInspection, VdField_WithQtStringRule_EmptyString_MessagePreserve
     AddressObject addr("Street 1", &city);
     UserAccount user("", "u@u.com", 30, &addr); // empty username — fails
 
-    auto r = model.is_valid(user);
+    auto r = model.check(user);
     EXPECT_FALSE(r.is_valid);
     ASSERT_EQ(r.failed_rules.size(), 1u);
     EXPECT_NE(r.failed_rules[0].find("string must be non-empty"), std::string::npos);
@@ -1837,7 +1837,7 @@ TEST(QtResultApiInspection, VdField_NamedWithBoolChecker_Fails_MessageContainsFi
     AddressObject addr("Street 1", &city);
     UserAccount user("", "u@u.com", 30, &addr);
 
-    auto r = model.is_valid(user);
+    auto r = model.check(user);
     EXPECT_FALSE(r.is_valid);
     ASSERT_EQ(r.failed_rules.size(), 1u);
     EXPECT_NE(r.failed_rules[0].find("username"), std::string::npos);
@@ -1852,7 +1852,7 @@ TEST(QtResultApiInspection, FailedResult_VdField_Format_ContainsCheckerMessage)
     AddressObject addr("Street 1", &city);
     UserAccount user("", "u@u.com", 30, &addr);
 
-    auto r = model.is_valid(user);
+    auto r = model.check(user);
     ASSERT_FALSE(r.is_valid);
     std::string report = r.format();
     EXPECT_NE(report.find("string must be non-empty"), std::string::npos);
@@ -1868,7 +1868,7 @@ TEST(QtResultApiInspection, DieIfFailed_OnQtModelFailedResult_ThrowsWithNonEmpty
     AddressObject addr("Street 1", &city);
     UserAccount user("", "u@u.com", 30, &addr);
 
-    auto r = model.is_valid(user);
+    auto r = model.check(user);
     try {
         r.die_if_failed();
         FAIL() << "Expected vd::validation_exception";

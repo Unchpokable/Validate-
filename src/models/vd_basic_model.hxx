@@ -31,16 +31,16 @@ struct basic_model {
     {
     }
 
-    vd::result is_valid(const_pointer_type object) const;
+    vd::result check(const_pointer_type object) const;
 
-    vd::result is_valid(const_reference_type object) const
+    vd::result check(const_reference_type object) const
     {
-        return is_valid(std::addressof(object));
+        return check(std::addressof(object));
     }
 
     void die_if_failed(const_pointer_type object) const
     {
-        vd::require<vd::validation_exception>(is_valid(object), "Object failed validation rules");
+        vd::require<vd::validation_exception>(check(object), "Object failed validation rules");
     }
 
     void die_if_failed(const_reference_type object) const
@@ -121,9 +121,9 @@ struct basic_bound_model {
 
     using model_type = basic_model<T>;
 
-    vd::result is_valid() const
+    vd::result check() const
     {
-        return m_model.is_valid(m_object);
+        return m_model.check(m_object);
     }
 
     void die_if_failed() const
@@ -148,7 +148,7 @@ private:
 
 template<typename T>
 requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
-vd::result basic_model<T>::is_valid(const_pointer_type object) const
+vd::result basic_model<T>::check(const_pointer_type object) const
 {
     if(object == nullptr) {
         return vd::result(false);
@@ -170,14 +170,14 @@ template<typename T, typename... Args>
 requires(std::same_as<std::decay_t<Args>, T> && ...)
 bool validate_many(const basic_model<T>& model, Args&&... objects)
 {
-    return (model.is_valid(objects).is_valid && ...);
+    return (model.check(objects).is_valid && ...);
 }
 
 template<typename T>
 bool validate_many(const basic_model<T>& model, const std::vector<T>& objects)
 {
     return std::ranges::all_of(objects, [&model](const T& obj) {
-        return model.is_valid(obj).is_valid;
+        return model.check(obj).is_valid;
     });
 }
 
@@ -186,7 +186,7 @@ requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
 bool validate_many(const basic_model<T>& model, const std::vector<T*>& object_ptrs)
 {
     return std::ranges::all_of(object_ptrs, [&model](const T* obj) {
-        return model.is_valid(obj).is_valid;
+        return model.check(obj).is_valid;
     });
 }
 
@@ -195,7 +195,7 @@ requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
 bool validate_many(const basic_model<T>& model, const std::vector<const T*>& object_ptrs)
 {
     return std::ranges::all_of(object_ptrs, [&model](const T* obj) {
-        return model.is_valid(obj).is_valid;
+        return model.check(obj).is_valid;
     });
 }
 } // namespace vd

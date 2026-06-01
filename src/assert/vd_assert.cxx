@@ -1,6 +1,6 @@
 #include "assert/vd_assert.hxx"
 
-namespace vd::details
+namespace vd::detail
 {
 [[noreturn]] void assert_fail(std::string_view message, const std::source_location& loc)
 {
@@ -12,4 +12,4 @@ namespace vd::details
         loc.function_name());
     std::abort();
 }
-} // namespace vd::details
+} // namespace vd::detail

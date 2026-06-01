@@ -222,13 +222,13 @@ TEST(QtPropertyTest, UsableWithBasicModel)
                      .with(vd::qt::qt_property<SampleQObject>("count", vd::int_bounds::inclusive(1, 10)));
 
     SampleQObject valid(50.0, 5, "");
-    EXPECT_TRUE(model.is_valid(valid));
+    EXPECT_TRUE(model.check(valid));
 
     SampleQObject bad_score(200.0, 5, "");
-    EXPECT_FALSE(model.is_valid(bad_score));
+    EXPECT_FALSE(model.check(bad_score));
 
     SampleQObject bad_count(50.0, 0, "");
-    EXPECT_FALSE(model.is_valid(bad_count));
+    EXPECT_FALSE(model.check(bad_count));
 }
 
 TEST(QtPropertyTest, InitializerListWithMultiplePropertyRules)
@@ -243,13 +243,13 @@ TEST(QtPropertyTest, InitializerListWithMultiplePropertyRules)
     });
 
     SampleQObject valid(1.0, 0, "ok");
-    EXPECT_TRUE(model.is_valid(valid));
+    EXPECT_TRUE(model.check(valid));
 
     SampleQObject bad_score(0.0, 0, "ok");
-    EXPECT_FALSE(model.is_valid(bad_score));
+    EXPECT_FALSE(model.check(bad_score));
 
     SampleQObject bad_label(1.0, 0, "");
-    EXPECT_FALSE(model.is_valid(bad_label));
+    EXPECT_FALSE(model.check(bad_label));
 }
 
 TEST(QtPropertyTest, MixedQtPropertyAndMemberRulesInModel)
@@ -262,10 +262,10 @@ TEST(QtPropertyTest, MixedQtPropertyAndMemberRulesInModel)
                      }));
 
     SampleQObject valid(50.0, 3, "");
-    EXPECT_TRUE(model.is_valid(valid));
+    EXPECT_TRUE(model.check(valid));
 
     SampleQObject bad_score(200.0, 3, "");
-    EXPECT_FALSE(model.is_valid(bad_score));
+    EXPECT_FALSE(model.check(bad_score));
 }
 
 // The moc file is needed because SampleQObject (with Q_OBJECT) is defined

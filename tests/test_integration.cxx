@@ -84,89 +84,89 @@ protected:
 
 TEST_F(UserRegistrationTest, ValidInput_Passes)
 {
-    EXPECT_TRUE(model.is_valid(valid));
+    EXPECT_TRUE(model.check(valid));
 }
 
 TEST_F(UserRegistrationTest, EmptyUsername_Fails)
 {
     auto u = valid;
     u.username = "";
-    EXPECT_FALSE(model.is_valid(u));
+    EXPECT_FALSE(model.check(u));
 }
 
 TEST_F(UserRegistrationTest, InvalidEmail_NoAt_Fails)
 {
     auto u = valid;
     u.email = "notanemail";
-    EXPECT_FALSE(model.is_valid(u));
+    EXPECT_FALSE(model.check(u));
 }
 
 TEST_F(UserRegistrationTest, InvalidEmail_NoDomain_Fails)
 {
     auto u = valid;
     u.email = "user@";
-    EXPECT_FALSE(model.is_valid(u));
+    EXPECT_FALSE(model.check(u));
 }
 
 TEST_F(UserRegistrationTest, AgeLowerBoundary_18_Passes)
 {
     auto u = valid;
     u.age = 18;
-    EXPECT_TRUE(model.is_valid(u));
+    EXPECT_TRUE(model.check(u));
 }
 
 TEST_F(UserRegistrationTest, AgeUpperBoundary_120_Passes)
 {
     auto u = valid;
     u.age = 120;
-    EXPECT_TRUE(model.is_valid(u));
+    EXPECT_TRUE(model.check(u));
 }
 
 TEST_F(UserRegistrationTest, AgeJustBelow18_Fails)
 {
     auto u = valid;
     u.age = 17;
-    EXPECT_FALSE(model.is_valid(u));
+    EXPECT_FALSE(model.check(u));
 }
 
 TEST_F(UserRegistrationTest, AgeJustAbove120_Fails)
 {
     auto u = valid;
     u.age = 121;
-    EXPECT_FALSE(model.is_valid(u));
+    EXPECT_FALSE(model.check(u));
 }
 
 TEST_F(UserRegistrationTest, ZeroAge_Fails)
 {
     auto u = valid;
     u.age = 0;
-    EXPECT_FALSE(model.is_valid(u));
+    EXPECT_FALSE(model.check(u));
 }
 
 TEST_F(UserRegistrationTest, NegativeAge_Fails)
 {
     auto u = valid;
     u.age = -1;
-    EXPECT_FALSE(model.is_valid(u));
+    EXPECT_FALSE(model.check(u));
 }
 
 TEST_F(UserRegistrationTest, Password7Chars_Fails)
 {
     auto u = valid;
     u.password = "abc1234";
-    EXPECT_FALSE(model.is_valid(u));
+    EXPECT_FALSE(model.check(u));
 }
 
 TEST_F(UserRegistrationTest, Password8Chars_Passes)
 {
     auto u = valid;
     u.password = "abc12345";
-    EXPECT_TRUE(model.is_valid(u));
+    EXPECT_TRUE(model.check(u));
 }
 
 TEST_F(UserRegistrationTest, AllFieldsInvalid_StillFails)
 {
-    EXPECT_FALSE(model.is_valid(UserRegistration { "", "bad-email", 15, "short" }));
+    EXPECT_FALSE(model.check(UserRegistration { "", "bad-email", 15, "short" }));
 }
 
 TEST_F(UserRegistrationTest, DieIfFailed_Valid_DoesNotThrow)
@@ -226,89 +226,89 @@ protected:
 
 TEST_F(ServerConfigTest, ValidConfig_Passes)
 {
-    EXPECT_TRUE(model.is_valid(valid));
+    EXPECT_TRUE(model.check(valid));
 }
 
 TEST_F(ServerConfigTest, Port_1_Passes)
 {
     auto c = valid;
     c.port = 1;
-    EXPECT_TRUE(model.is_valid(c));
+    EXPECT_TRUE(model.check(c));
 }
 TEST_F(ServerConfigTest, Port_65535_Passes)
 {
     auto c = valid;
     c.port = 65535;
-    EXPECT_TRUE(model.is_valid(c));
+    EXPECT_TRUE(model.check(c));
 }
 TEST_F(ServerConfigTest, Port_0_Fails)
 {
     auto c = valid;
     c.port = 0;
-    EXPECT_FALSE(model.is_valid(c));
+    EXPECT_FALSE(model.check(c));
 }
 TEST_F(ServerConfigTest, Port_65536_Fails)
 {
     auto c = valid;
     c.port = 65536;
-    EXPECT_FALSE(model.is_valid(c));
+    EXPECT_FALSE(model.check(c));
 }
 TEST_F(ServerConfigTest, Port_Negative_Fails)
 {
     auto c = valid;
     c.port = -1;
-    EXPECT_FALSE(model.is_valid(c));
+    EXPECT_FALSE(model.check(c));
 }
 
 TEST_F(ServerConfigTest, MaxConns_1_Passes)
 {
     auto c = valid;
     c.max_connections = 1;
-    EXPECT_TRUE(model.is_valid(c));
+    EXPECT_TRUE(model.check(c));
 }
 TEST_F(ServerConfigTest, MaxConns_10000_Passes)
 {
     auto c = valid;
     c.max_connections = 10000;
-    EXPECT_TRUE(model.is_valid(c));
+    EXPECT_TRUE(model.check(c));
 }
 TEST_F(ServerConfigTest, MaxConns_0_Fails)
 {
     auto c = valid;
     c.max_connections = 0;
-    EXPECT_FALSE(model.is_valid(c));
+    EXPECT_FALSE(model.check(c));
 }
 TEST_F(ServerConfigTest, MaxConns_10001_Fails)
 {
     auto c = valid;
     c.max_connections = 10001;
-    EXPECT_FALSE(model.is_valid(c));
+    EXPECT_FALSE(model.check(c));
 }
 
 TEST_F(ServerConfigTest, EmptyHost_Fails)
 {
     auto c = valid;
     c.host = "";
-    EXPECT_FALSE(model.is_valid(c));
+    EXPECT_FALSE(model.check(c));
 }
 TEST_F(ServerConfigTest, ZeroTimeout_Fails)
 {
     auto c = valid;
     c.timeout_seconds = 0.0;
-    EXPECT_FALSE(model.is_valid(c));
+    EXPECT_FALSE(model.check(c));
 }
 TEST_F(ServerConfigTest, NegativeTimeout_Fails)
 {
     auto c = valid;
     c.timeout_seconds = -1.0;
-    EXPECT_FALSE(model.is_valid(c));
+    EXPECT_FALSE(model.check(c));
 }
 
 TEST_F(ServerConfigTest, VerySmallPositiveTimeout_Passes)
 {
     auto c = valid;
     c.timeout_seconds = std::nextafter(0.0, 1.0);
-    EXPECT_TRUE(model.is_valid(c));
+    EXPECT_TRUE(model.check(c));
 }
 
 // ============================================================================
@@ -332,79 +332,79 @@ protected:
 
 TEST_F(ProductTest, ValidProduct_Passes)
 {
-    EXPECT_TRUE(model.is_valid(valid));
+    EXPECT_TRUE(model.check(valid));
 }
 TEST_F(ProductTest, ZeroPrice_Fails)
 {
     auto p = valid;
     p.price = 0.0;
-    EXPECT_FALSE(model.is_valid(p));
+    EXPECT_FALSE(model.check(p));
 }
 TEST_F(ProductTest, NegativePrice_Fails)
 {
     auto p = valid;
     p.price = -0.01;
-    EXPECT_FALSE(model.is_valid(p));
+    EXPECT_FALSE(model.check(p));
 }
 TEST_F(ProductTest, PriceAt10000_Passes)
 {
     auto p = valid;
     p.price = 10000.0;
-    EXPECT_TRUE(model.is_valid(p));
+    EXPECT_TRUE(model.check(p));
 }
 TEST_F(ProductTest, PriceJustAbove10000_Fails)
 {
     auto p = valid;
     p.price = 10000.01;
-    EXPECT_FALSE(model.is_valid(p));
+    EXPECT_FALSE(model.check(p));
 }
 TEST_F(ProductTest, ZeroStock_Passes)
 {
     auto p = valid;
     p.stock = 0;
-    EXPECT_TRUE(model.is_valid(p));
+    EXPECT_TRUE(model.check(p));
 }
 TEST_F(ProductTest, NegativeStock_Fails)
 {
     auto p = valid;
     p.stock = -1;
-    EXPECT_FALSE(model.is_valid(p));
+    EXPECT_FALSE(model.check(p));
 }
 TEST_F(ProductTest, Discount0_Passes)
 {
     auto p = valid;
     p.discount_percent = 0.0;
-    EXPECT_TRUE(model.is_valid(p));
+    EXPECT_TRUE(model.check(p));
 }
 TEST_F(ProductTest, Discount100_Passes)
 {
     auto p = valid;
     p.discount_percent = 100.0;
-    EXPECT_TRUE(model.is_valid(p));
+    EXPECT_TRUE(model.check(p));
 }
 TEST_F(ProductTest, DiscountOver100_Fails)
 {
     auto p = valid;
     p.discount_percent = 100.01;
-    EXPECT_FALSE(model.is_valid(p));
+    EXPECT_FALSE(model.check(p));
 }
 TEST_F(ProductTest, NegativeDiscount_Fails)
 {
     auto p = valid;
     p.discount_percent = -0.01;
-    EXPECT_FALSE(model.is_valid(p));
+    EXPECT_FALSE(model.check(p));
 }
 TEST_F(ProductTest, EmptySKU_Fails)
 {
     auto p = valid;
     p.sku = "";
-    EXPECT_FALSE(model.is_valid(p));
+    EXPECT_FALSE(model.check(p));
 }
 TEST_F(ProductTest, EmptyName_Fails)
 {
     auto p = valid;
     p.name = "";
-    EXPECT_FALSE(model.is_valid(p));
+    EXPECT_FALSE(model.check(p));
 }
 
 // ============================================================================
@@ -434,68 +434,68 @@ protected:
 
 TEST_F(TransferTest, ValidTransfer_Passes)
 {
-    EXPECT_TRUE(model.is_valid(valid));
+    EXPECT_TRUE(model.check(valid));
 }
 TEST_F(TransferTest, ZeroAmount_Fails)
 {
     auto t = valid;
     t.amount = 0.0;
-    EXPECT_FALSE(model.is_valid(t));
+    EXPECT_FALSE(model.check(t));
 }
 TEST_F(TransferTest, NegativeAmount_Fails)
 {
     auto t = valid;
     t.amount = -100.0;
-    EXPECT_FALSE(model.is_valid(t));
+    EXPECT_FALSE(model.check(t));
 }
 TEST_F(TransferTest, ZeroFee_Passes)
 {
     auto t = valid;
     t.fee = 0.0;
-    EXPECT_TRUE(model.is_valid(t));
+    EXPECT_TRUE(model.check(t));
 }
 TEST_F(TransferTest, FeeEqualToAmount_Fails)
 {
     auto t = valid;
     t.fee = t.amount;
-    EXPECT_FALSE(model.is_valid(t));
+    EXPECT_FALSE(model.check(t));
 }
 TEST_F(TransferTest, FeeGreaterThanAmount_Fails)
 {
     auto t = valid;
     t.fee = t.amount + 1.0;
-    EXPECT_FALSE(model.is_valid(t));
+    EXPECT_FALSE(model.check(t));
 }
 TEST_F(TransferTest, NegativeFee_Fails)
 {
     auto t = valid;
     t.fee = -1.0;
-    EXPECT_FALSE(model.is_valid(t));
+    EXPECT_FALSE(model.check(t));
 }
 TEST_F(TransferTest, SelfTransfer_Fails)
 {
     auto t = valid;
     t.to_account = t.from_account;
-    EXPECT_FALSE(model.is_valid(t));
+    EXPECT_FALSE(model.check(t));
 }
 TEST_F(TransferTest, EmptyFromAccount_Fails)
 {
     auto t = valid;
     t.from_account = "";
-    EXPECT_FALSE(model.is_valid(t));
+    EXPECT_FALSE(model.check(t));
 }
 TEST_F(TransferTest, EmptyToAccount_Fails)
 {
     auto t = valid;
     t.to_account = "";
-    EXPECT_FALSE(model.is_valid(t));
+    EXPECT_FALSE(model.check(t));
 }
 
 TEST_F(TransferTest, FeeJustBelowAmount_Passes)
 {
     auto t = valid;
     t.fee = std::nextafter(t.amount, 0.0);
-    EXPECT_TRUE(model.is_valid(t));
+    EXPECT_TRUE(model.check(t));
 }
 
 // ============================================================================
@@ -517,25 +517,25 @@ protected:
 
 TEST_F(ModelCompositionTest, BaseModel_AcceptsRegularUser)
 {
-    EXPECT_TRUE(base_model.is_valid(regular));
+    EXPECT_TRUE(base_model.check(regular));
 }
 TEST_F(ModelCompositionTest, BaseModel_AcceptsAdminUser)
 {
-    EXPECT_TRUE(base_model.is_valid(admin));
+    EXPECT_TRUE(base_model.check(admin));
 }
 TEST_F(ModelCompositionTest, AdminModel_AcceptsAdminUser)
 {
-    EXPECT_TRUE(admin_model.is_valid(admin));
+    EXPECT_TRUE(admin_model.check(admin));
 }
 TEST_F(ModelCompositionTest, AdminModel_RejectsEmptyToken)
 {
-    EXPECT_FALSE(admin_model.is_valid(regular));
+    EXPECT_FALSE(admin_model.check(regular));
 }
 
 TEST_F(ModelCompositionTest, AdminModel_StillEnforcesBaseRules)
 {
     UserProfile bad_admin { "admin", "not-an-email", "bio", "valid-token" };
-    EXPECT_FALSE(admin_model.is_valid(bad_admin));
+    EXPECT_FALSE(admin_model.check(bad_admin));
 }
 
 TEST_F(ModelCompositionTest, WithModel_CombinesRulesFromBothSides)
@@ -545,10 +545,10 @@ TEST_F(ModelCompositionTest, WithModel_CombinesRulesFromBothSides)
 
     auto combined = vd::basic_model<UserProfile> {}.with(x_model).with(y_model);
 
-    EXPECT_TRUE(combined.is_valid(UserProfile { "alice", "alice@a.com", "", "" }));
-    EXPECT_FALSE(combined.is_valid(UserProfile { "", "alice@a.com", "", "" }));
-    EXPECT_FALSE(combined.is_valid(UserProfile { "alice", "bad-email", "", "" }));
-    EXPECT_FALSE(combined.is_valid(UserProfile { "", "bad-email", "", "" }));
+    EXPECT_TRUE(combined.check(UserProfile { "alice", "alice@a.com", "", "" }));
+    EXPECT_FALSE(combined.check(UserProfile { "", "alice@a.com", "", "" }));
+    EXPECT_FALSE(combined.check(UserProfile { "alice", "bad-email", "", "" }));
+    EXPECT_FALSE(combined.check(UserProfile { "", "bad-email", "", "" }));
 }
 
 TEST_F(ModelCompositionTest, EmptyModel_ComposedWithAnother_OnlyOtherRulesApply)
@@ -556,8 +556,8 @@ TEST_F(ModelCompositionTest, EmptyModel_ComposedWithAnother_OnlyOtherRulesApply)
     vd::basic_model<UserProfile> empty;
     auto combined = vd::basic_model<UserProfile> {}.with(empty).with(base_model);
 
-    EXPECT_TRUE(combined.is_valid(regular));
-    EXPECT_FALSE(combined.is_valid(UserProfile { "", "bad", "", "" }));
+    EXPECT_TRUE(combined.check(regular));
+    EXPECT_FALSE(combined.check(UserProfile { "", "bad", "", "" }));
 }
 
 // ============================================================================
@@ -571,13 +571,13 @@ TEST(BoundModelReferenceSemantics, IsValid_ReflectsObjectMutation)
     auto model = vd::int_model {}.with(vd::rule<std::int32_t>(vd::int_bounds::inclusive(1, 10)));
     auto bound = model.bind(counter);
 
-    EXPECT_TRUE(bound.is_valid());
+    EXPECT_TRUE(bound.check());
 
     counter = 0;
-    EXPECT_FALSE(bound.is_valid());
+    EXPECT_FALSE(bound.check());
 
     counter = 10;
-    EXPECT_TRUE(bound.is_valid());
+    EXPECT_TRUE(bound.check());
 }
 
 TEST(BoundModelReferenceSemantics, BindByPointer_ReflectsMutation)
@@ -586,9 +586,9 @@ TEST(BoundModelReferenceSemantics, BindByPointer_ReflectsMutation)
     auto model = vd::int_model {}.with(vd::rule<std::int32_t>(vd::int_bounds::inclusive(0, 100)));
     auto bound = model.bind(&value);
 
-    EXPECT_TRUE(bound.is_valid());
+    EXPECT_TRUE(bound.check());
     value = 200;
-    EXPECT_FALSE(bound.is_valid());
+    EXPECT_FALSE(bound.check());
 }
 
 TEST(BoundModelReferenceSemantics, DeadCheck_AfterMutation_ThrowsWhenInvalid)
@@ -629,7 +629,7 @@ TEST(BulkValidationTest, CountValidProducts_InCatalog)
     };
 
     auto count = std::count_if(catalog.begin(), catalog.end(), [&model](const Product& p) {
-        return model.is_valid(p);
+        return model.check(p);
     });
 
     EXPECT_EQ(count, 2);
@@ -649,7 +649,7 @@ TEST(BulkValidationTest, FilterValidRegistrations_IntoAccepted)
 
     std::vector<UserRegistration> accepted;
     std::copy_if(inputs.begin(), inputs.end(), std::back_inserter(accepted), [&model](const UserRegistration& u) {
-        return model.is_valid(u);
+        return model.check(u);
     });
 
     ASSERT_EQ(accepted.size(), 2u);
@@ -719,7 +719,7 @@ TEST_F(FieldErrorCollectionTest, MultipleFieldsInvalid_AllErrorsCollected)
 static bool start_server(const ServerConfig& cfg)
 {
     auto model = make_server_config_model();
-    vd::require<std::invalid_argument>(model.is_valid(cfg), "Invalid server config: host='{}', port={}", cfg.host, cfg.port);
+    vd::require<std::invalid_argument>(model.check(cfg), "Invalid server config: host='{}', port={}", cfg.host, cfg.port);
     return true;
 }
 
@@ -753,13 +753,13 @@ TEST(RequireInBusinessLogicTest, ThrowMessage_ContainsHostAndPort)
 TEST(ExtremeValuesTest, INT32_MAX_PassesUnboundedModel)
 {
     auto model = vd::int_model {}.with(vd::rule<std::int32_t>(vd::int_bounds::unbounded()));
-    EXPECT_TRUE(model.is_valid(std::numeric_limits<std::int32_t>::max()));
+    EXPECT_TRUE(model.check(std::numeric_limits<std::int32_t>::max()));
 }
 
 TEST(ExtremeValuesTest, INT32_MIN_PassesUnboundedModel)
 {
     auto model = vd::int_model {}.with(vd::rule<std::int32_t>(vd::int_bounds::unbounded()));
-    EXPECT_TRUE(model.is_valid(std::numeric_limits<std::int32_t>::min()));
+    EXPECT_TRUE(model.check(std::numeric_limits<std::int32_t>::min()));
 }
 
 TEST(ExtremeValuesTest, Infinity_FailsFiniteInclusiveBounds)
@@ -782,11 +782,11 @@ TEST(ExtremeValuesTest, NaN_AndInfinity_DetectedByExplicitPredicate)
         return !std::isnan(v) && !std::isinf(v) && v >= 0.0;
     }));
 
-    EXPECT_FALSE(model.is_valid(std::numeric_limits<double>::quiet_NaN()));
-    EXPECT_FALSE(model.is_valid(std::numeric_limits<double>::infinity()));
-    EXPECT_FALSE(model.is_valid(-1.0));
-    EXPECT_TRUE(model.is_valid(0.0));
-    EXPECT_TRUE(model.is_valid(42.0));
+    EXPECT_FALSE(model.check(std::numeric_limits<double>::quiet_NaN()));
+    EXPECT_FALSE(model.check(std::numeric_limits<double>::infinity()));
+    EXPECT_FALSE(model.check(-1.0));
+    EXPECT_TRUE(model.check(0.0));
+    EXPECT_TRUE(model.check(42.0));
 }
 
 TEST(ExtremeValuesTest, UINT8_AgeRange_MaxValueExcluded)
@@ -837,10 +837,10 @@ TEST(RegexValidationTest, RegexCheckerComposedInModel)
                      .with(vd::member(&Item::code, vd::string_rules::regex(R"([A-Z]{2}-\d{4})")))
                      .with(vd::member(&Item::value, vd::double_bounds::greater_than(0.0)));
 
-    EXPECT_TRUE(model.is_valid({ "AB-1234", 1.0 }));
-    EXPECT_FALSE(model.is_valid({ "ab-1234", 1.0 })); // bad code
-    EXPECT_FALSE(model.is_valid({ "AB-1234", 0.0 })); // bad value
-    EXPECT_FALSE(model.is_valid({ "", -1.0 }));       // both fail
+    EXPECT_TRUE(model.check({ "AB-1234", 1.0 }));
+    EXPECT_FALSE(model.check({ "ab-1234", 1.0 })); // bad code
+    EXPECT_FALSE(model.check({ "AB-1234", 0.0 })); // bad value
+    EXPECT_FALSE(model.check({ "", -1.0 }));       // both fail
 }
 
 // ============================================================================
@@ -861,12 +861,12 @@ TEST(DynamicModelBuildingTest, RuntimeConstraints_Intersected)
     for(const auto& c : constraints)
         model.add_rule(vd::rule<std::int32_t>(vd::int_bounds::inclusive(c.lo, c.hi)));
 
-    EXPECT_TRUE(model.is_valid(25));
-    EXPECT_TRUE(model.is_valid(50));
-    EXPECT_FALSE(model.is_valid(24)); // excluded by [25,75]
-    EXPECT_FALSE(model.is_valid(51)); // excluded by [10,50]
-    EXPECT_FALSE(model.is_valid(0));
-    EXPECT_FALSE(model.is_valid(100));
+    EXPECT_TRUE(model.check(25));
+    EXPECT_TRUE(model.check(50));
+    EXPECT_FALSE(model.check(24)); // excluded by [25,75]
+    EXPECT_FALSE(model.check(51)); // excluded by [10,50]
+    EXPECT_FALSE(model.check(0));
+    EXPECT_FALSE(model.check(100));
 }
 
 TEST(DynamicModelBuildingTest, ModelExtendedAtRuntime_NewRuleEnforced)
@@ -875,25 +875,25 @@ TEST(DynamicModelBuildingTest, ModelExtendedAtRuntime_NewRuleEnforced)
     auto model = vd::basic_model<Product> {}.with(vd::member(&Product::name, vd::string_rules::non_empty()));
 
     Product p { "X", "Widget", 5.0, 1, 0.0 };
-    EXPECT_TRUE(model.is_valid(p));
+    EXPECT_TRUE(model.check(p));
 
     model.add_rule(vd::predicate([](const Product& pr) {
         return pr.price > 0.0 && pr.price <= 100.0;
     }));
 
-    EXPECT_TRUE(model.is_valid(p)); // 5.0 in (0, 100]
+    EXPECT_TRUE(model.check(p)); // 5.0 in (0, 100]
 
     p.price = 200.0;
-    EXPECT_FALSE(model.is_valid(p)); // 200 > 100
+    EXPECT_FALSE(model.check(p)); // 200 > 100
 
     p.price = 0.0;
-    EXPECT_FALSE(model.is_valid(p)); // 0 not > 0
+    EXPECT_FALSE(model.check(p)); // 0 not > 0
 }
 
 // ============================================================================
 // 13. vd::result API — result object content inspection
 //
-// These tests verify that model.is_valid() returns a vd::result that carries
+// These tests verify that model.check() returns a vd::result that carries
 // not only a pass/fail flag but also diagnostic messages from the rules that
 // failed. Rule message propagation depends on what the checker returns:
 //
@@ -958,7 +958,7 @@ TEST(ResultObjectTest, Format_FailedResult_EachMessageAppearsInReport)
 TEST(ResultObjectTest, ModelPasses_Result_IsValidAndEmptyFailedRules)
 {
     UserRegistration good { "alice", "alice@example.com", 25, "securepass!" };
-    auto r = make_registration_model().is_valid(good);
+    auto r = make_registration_model().check(good);
     EXPECT_TRUE(r.is_valid);
     EXPECT_TRUE(r.failed_rules.empty());
 }
@@ -970,7 +970,7 @@ TEST(ResultObjectTest, NamedMemberStringRule_EmptyString_MessageIsCheckerDescrip
     auto model =
         vd::basic_model<UserRegistration> {}.with(vd::member("username", &UserRegistration::username, vd::string_rules::non_empty()));
 
-    auto r = model.is_valid(UserRegistration { "", "a@b.com", 25, "pass1234" });
+    auto r = model.check(UserRegistration { "", "a@b.com", 25, "pass1234" });
 
     EXPECT_FALSE(r.is_valid);
     ASSERT_EQ(r.failed_rules.size(), 1u);
@@ -981,7 +981,7 @@ TEST(ResultObjectTest, NamedMemberEmailRule_InvalidEmail_MessageDescribesEmailFa
 {
     auto model = vd::basic_model<UserRegistration> {}.with(vd::member("email", &UserRegistration::email, vd::string_rules::email_like()));
 
-    auto r = model.is_valid(UserRegistration { "alice", "notanemail", 25, "pass1234" });
+    auto r = model.check(UserRegistration { "alice", "notanemail", 25, "pass1234" });
 
     EXPECT_FALSE(r.is_valid);
     ASSERT_EQ(r.failed_rules.size(), 1u);
@@ -994,7 +994,7 @@ TEST(ResultObjectTest, UnnamedMemberNumericBounds_OutOfRange_MessageContainsValu
 {
     auto model = vd::basic_model<UserRegistration> {}.with(vd::member(&UserRegistration::age, vd::int_bounds::inclusive(18, 120)));
 
-    auto r = model.is_valid(UserRegistration { "alice", "a@b.com", 15, "pass1234" });
+    auto r = model.check(UserRegistration { "alice", "a@b.com", 15, "pass1234" });
 
     EXPECT_FALSE(r.is_valid);
     ASSERT_EQ(r.failed_rules.size(), 1u);
@@ -1011,7 +1011,7 @@ TEST(ResultObjectTest, NamedMemberBoolChecker_Fails_MessageContainsFieldName)
         return p.size() >= 8;
     }));
 
-    auto r = model.is_valid(UserRegistration { "alice", "a@b.com", 25, "short" });
+    auto r = model.check(UserRegistration { "alice", "a@b.com", 25, "short" });
 
     EXPECT_FALSE(r.is_valid);
     ASSERT_EQ(r.failed_rules.size(), 1u);
@@ -1025,7 +1025,7 @@ TEST(ResultObjectTest, ServiceBoundary_ResultInspection_GatesProcessingAndProvid
     auto model = make_server_config_model();
     ServerConfig bad { "", 0, 0, -1.0 };
 
-    auto r = model.is_valid(bad);
+    auto r = model.check(bad);
 
     ASSERT_FALSE(r);                      // operator bool() gates further processing
     EXPECT_FALSE(r.failed_rules.empty()); // at least the first failure is captured
