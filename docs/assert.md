@@ -5,18 +5,23 @@
 
 ## Назначение
 
-Assert module — внутренний инструмент библиотеки для контроля предусловий. Используется как внутри реализации (`vd::require` в `basic_bound_model`), так и в checker-ах (`vd::string_rules::detail::std_regex`). Может использоваться и в коде пользователя.
+Assert module — Набор инструментов для контроля предусловий. Используется как внутри реализации (`vd::require` в `basic_bound_model`), так и в checker-ах (`vd::string_rules::detail::std_regex`). Может использоваться и в коде пользователя.
 
 Ключевое свойство: при провале условия в сообщении об ошибке автоматически указываются **файл, строка и имя функции** — место вызова `require`, а не внутренности библиотеки. Это достигается захватом `std::source_location::current()` в параметре форматной строки через `consteval`-конструктор.
 
 ## API
 
+### `concept contextually_bool`
+Сервисный концепт для шаблонов `vd::require`, описывающий требование к произвольному объекту типа `T` такое, что произвольный объект типа `T` поддерживает `contextual bool conversion` - то есть может использоваться внутри условий (`if` и тернарный оператор) без явного приведения к `bool` типу при помощи `static_cast<>` или других механизмов.
+
 ### `vd::require`
 
 ```cpp
-template<typename... Args>
-void vd::require(bool condition, format_string fmt, Args&&... args);
+template<detail::contextually_bool Cond, typename... Args>
+void vd::require(Cond&& condition, format_string fmt, Args&&... args);
 ```
+
+Параметр condition может являться любым типом, допускающим контекстное приведение к `bool`.
 
 Если `condition == false` — форматирует сообщение через `std::format`, выводит в `stderr` и вызывает `std::abort()`.
 
@@ -38,9 +43,9 @@ Function: void foo()
 
 ### `vd::require<exception>`
 ```cpp
-template<typename ExceptionType, typename... Args>
+template<detail::contextually_bool Cond, typename ExceptionType, typename... Args>
     requires std::derived_from<ExceptionType, std::exception>
-void vd::require(bool condition, format_string fmt, Args&&... args);
+void vd::require(Cond&& condition, format_string fmt, Args&&... args);
 ```
 
 Если `condition == false` — форматирует сообщение через `std::format` и бросает `ExceptionType`, конструируя его из отформатированной строки (передаётся в конструктор как `std::string`). Это означает, что `what()` исключения будет содержать именно текст сообщения — без строки, файла и функции (в отличие от abort-версии).
@@ -63,9 +68,9 @@ vd::require<std::runtime_error>(true, "This never fires");
 ### `vd::require_callback`
 
 ```cpp
-template<auto OnFailed, typename... Args>
+template<auto OnFailed, detail::contextually_bool Cond, typename... Args>
     requires std::invocable<decltype(OnFailed), std::string_view>
-void vd::require_callback(bool condition, format_string fmt, Args&&... args);
+void vd::require_callback(Cond&& condition, format_string fmt, Args&&... args);
 ```
 
 Вместо `abort()` вызывает переданный NTTP-callable с отформатированным сообщением. Полезно для тестирования и для встраивания в систему логирования.
@@ -88,7 +93,7 @@ vd::require_callback<my_logger>(value > 0, "Bad value: {}", value);
 
 ```cpp
 // Сигнатура require:
-void require(bool condition,
+void require(Cond&& condition,
              details::assert_format<std::type_identity_t<Args>...> fmt_loc,
              Args&&... args);
 //                    ^^^^^^^^^^^^^^^^ <- Args выводятся отсюда
@@ -106,7 +111,7 @@ void require(bool condition,
 ```cpp
 #ifndef _NDEBUG
 // debug-only реализации
-void required(bool condition, format_string fmt, Args&&... args);
+void required(Cond&& condition, format_string fmt, Args&&... args);
 template<typename ExceptionType, ...> void required(...);
 template<auto OnFailed, ...> void require_callbackd(...);
 #else

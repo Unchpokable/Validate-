@@ -267,8 +267,8 @@ TEST(QStringRulesRegexTest, WorksWithQStringView)
 
 TEST(QStringRulesRegexDeathTest, InvalidPatternAborts)
 {
-    auto checker = vd::qt::string_rules::regex("[invalid");
-    EXPECT_DEATH(checker(QString("anything")), "");
+    // An invalid regex pattern must trigger vd::require and abort.
+    EXPECT_DEATH(vd::qt::string_rules::regex("[invalid"), "");
 }
 
 // ---------------------------------------------------------------------------

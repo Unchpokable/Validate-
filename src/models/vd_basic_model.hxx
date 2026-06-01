@@ -13,6 +13,7 @@
 #include "assert/vd_assert.hxx"
 
 #include "core/vd_exception.hxx"
+#include "core/vd_not_null.hxx"
 #include "core/vd_result.hxx"
 
 namespace vd
@@ -48,10 +49,8 @@ struct basic_model {
         die_if_failed(std::addressof(object));
     }
 
-    basic_bound_model<T> bind(const_pointer_type object) const&
+    basic_bound_model<T> bind(vd::not_null<const_pointer_type> object) const&
     {
-        vd::require(object != nullptr, "Binding to nullptr objects is not allowed!");
-
         return basic_bound_model<T>::bind(*this, object);
     }
 
@@ -60,7 +59,7 @@ struct basic_model {
         return bind(std::addressof(object));
     }
 
-    basic_bound_model<T> bind(const_pointer_type) const&& = delete;
+    basic_bound_model<T> bind(vd::not_null<const_pointer_type>) const&& = delete;
     basic_bound_model<T> bind(const_reference_type) const&& = delete;
 
     void add_rule(vd::rule<T> rule)
@@ -132,18 +131,18 @@ struct basic_bound_model {
     }
 
     // bind stores a non-owning reference — the model must outlive the bound instance.
-    static basic_bound_model bind(const model_type& model, const_pointer_type object)
+    static basic_bound_model bind(const model_type& model, vd::not_null<const_pointer_type> object)
     {
         return basic_bound_model(model, object);
     }
 
 private:
-    basic_bound_model(const model_type& model, const_pointer_type object) : m_model(model), m_object(object)
+    basic_bound_model(const model_type& model, vd::not_null<const_pointer_type> object) : m_model(model), m_object(object)
     {
     }
 
     const model_type& m_model;
-    const_pointer_type m_object;
+    vd::not_null<const_pointer_type> m_object;
 };
 
 template<typename T>

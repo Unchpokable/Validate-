@@ -36,6 +36,18 @@ concept contextually_bool = requires(T&& t) {
 
 namespace vd
 {
+template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
+requires std::derived_from<ExceptionType, std::exception>
+constexpr void ct_require(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+{
+    if(!condition) {
+        throw ExceptionType(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
+    }
+}
+} // namespace vd
+
+namespace vd
+{
 template<detail::contextually_bool Cond, typename... Args>
 void require(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {

@@ -522,9 +522,9 @@ TEST(BoundModelTest, IsValidDelegatesToModel)
 
 TEST(BoundModelTest, BindByPointerAbortOnNull)
 {
-    // Passing a null pointer to bind() must abort — it violates the precondition.
+    // Passing a null pointer to bind() must throw — it violates the precondition.
     auto model = vd::basic_model<Point>();
-    EXPECT_DEATH(model.bind(static_cast<const Point*>(nullptr)), "");
+    EXPECT_THROW(model.bind(static_cast<const Point*>(nullptr)), vd::assertion_exception);
 }
 
 // ---------------------------------------------------------------------------
