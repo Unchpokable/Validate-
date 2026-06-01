@@ -1,0 +1,43 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, devel]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC x64
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Qt 6.9.2 (MSVC 2022 x64)
+        id: install-qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.9.2'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2022_64'
+          cache: true
+
+      - name: Configure
+        run: >
+          cmake -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DVD_EXTENSION_QT_BASE=ON
+          -DVD_QT_DIR="${{ env.QT_ROOT_DIR }}"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
