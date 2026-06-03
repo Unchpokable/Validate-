@@ -39,6 +39,13 @@ struct basic_model {
         return check(std::addressof(object));
     }
 
+    vd::result short_check(const_pointer_type object) const;
+
+    vd::result short_check(const_reference_type object) const
+    {
+        return check(std::addressof(object));
+    }
+
     void die_if_failed(const_pointer_type object) const
     {
         vd::require<vd::validation_exception>(check(object), "Object failed validation rules");
@@ -160,6 +167,24 @@ vd::result basic_model<T>::check(const_pointer_type object) const
     }
 
     return final_result;
+}
+
+template<typename T>
+requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
+vd::result basic_model<T>::short_check(const_pointer_type object) const
+{
+    if(object == nullptr) {
+        return vd::result(false);
+    }
+
+    for(const auto& r : m_rules) {
+        vd::result res = r(object);
+        if(!res) {
+            return vd::result::failed(res.failed_rules);
+        }
+    }
+
+    return vd::result::ok();
 }
 } // namespace vd
 
