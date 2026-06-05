@@ -256,10 +256,10 @@ auto bound = vd::basic_model<Point>().with(...).bind(point); // Невозмож
 
 ### `bind()` и nullptr
 
-При передаче `nullptr` в `bind` срабатывает `vd::require` → `std::abort()`:
+При передаче `nullptr` в `bind` срабатывает нарушение контракта `basic_bound_model<T>::bind(vd::not_null<const_pointer_type>)` - либо ошибка компиляции при прямой передаче nullptr, либо вызов `std::terminate` в runtime.
 
 ```cpp
-model.bind(nullptr);  // abort с диагностическим сообщением
+model.bind(nullptr);  // ошибка компиляции
 ```
 
 ---
