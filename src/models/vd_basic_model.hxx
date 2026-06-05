@@ -132,6 +132,11 @@ struct basic_bound_model {
         return m_model.check(m_object);
     }
 
+    vd::result short_check() const
+    {
+        return m_model.short_check(m_object);
+    }
+
     void die_if_failed() const
     {
         m_model.die_if_failed(m_object);
