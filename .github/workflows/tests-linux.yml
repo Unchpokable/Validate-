@@ -1,0 +1,55 @@
+name: Tests (Linux)
+
+on:
+  push:
+    branches: [main, devel]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+          - { name: GCC,   cc: gcc-13,    cxx: g++-13     }
+          - { name: Clang, cc: clang-18,  cxx: clang++-18 }
+
+    name: Tests / ${{ matrix.compiler.name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y ninja-build ${{ matrix.compiler.cxx }} libgl-dev
+
+      - name: Install Qt 6.9.2 (Linux GCC 64)
+        id: install-qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.9.2'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          cache: true
+
+      - name: Configure
+        env:
+          CC:  ${{ matrix.compiler.cc }}
+          CXX: ${{ matrix.compiler.cxx }}
+        run: >
+          cmake -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DVD_EXTENSION_QT_BASE=ON
+          -DVD_QT_DIR="${{ env.QT_ROOT_DIR }}"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
