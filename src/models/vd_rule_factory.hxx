@@ -25,7 +25,7 @@ auto field(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule<
 {
     using T = member_class_t<MemberPtr>;
     return rule<T>([field_name = std::string(field_name), ptr, checker](const T& obj) -> vd::result {
-        auto val = std::invoke(ptr, obj);
+        decltype(auto) val = std::invoke(ptr, obj);
 
         using checker_return = std::invoke_result_t<Checker, decltype(val)>;
 
@@ -64,7 +64,7 @@ auto member(std::string_view field_name, MemberPtr ptr, Checker checker) -> rule
     using T = member_class_t<MemberPtr>;
 
     return rule<T>([field_name = std::string(field_name), ptr, checker](const T& obj) -> vd::result {
-        auto val = std::invoke(ptr, obj);
+        decltype(auto) val = std::invoke(ptr, obj);
 
         using checker_return = std::invoke_result_t<Checker, decltype(val)>;
 
