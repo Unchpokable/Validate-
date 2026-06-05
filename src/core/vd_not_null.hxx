@@ -9,12 +9,6 @@
 
 namespace vd::detail
 {
-consteval void true_or_die(bool condition)
-{
-    if(!condition) {
-        throw "not_null cannot be constructed with nullptr";
-    }
-}
 
 [[noreturn]] inline void terminate_on_nullptr()
 {
@@ -40,7 +34,9 @@ struct not_null final {
     constexpr not_null(pointer_type ptr) : m_ptr(ptr)
     {
         if(std::is_constant_evaluated()) {
-            vd::detail::true_or_die(ptr != nullptr);
+            if(ptr == nullptr) {
+                throw "not_null cannot be constructed with nullptr";
+            }
         }
         else {
             if(ptr == nullptr) [[unlikely]] {
@@ -66,7 +62,9 @@ struct not_null final {
     constexpr not_null& operator=(pointer_type ptr)
     {
         if(std::is_constant_evaluated()) {
-            vd::detail::true_or_die(ptr != nullptr);
+            if(ptr == nullptr) {
+                throw "not_null cannot be constructed with nullptr";
+            }
         }
         else {
             if(ptr == nullptr) [[unlikely]] {
