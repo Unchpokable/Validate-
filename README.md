@@ -19,7 +19,7 @@ auto user_model = vd::basic_model<User>()
     .with(vd::member(&User::salary, vd::double_bounds::greater_than(0.0)));
 
 User u{"Alice", "alice@example.com", 30, 75000.0};
-vd::result ok = user_model.is_valid(u);  // ok.is_valid == true
+vd::result r = user_model.check(u);  // r.is_valid == true
 ```
 
 ## Features
@@ -30,6 +30,7 @@ vd::result ok = user_model.is_valid(u);  // ok.is_valid == true
 - **Numeric bounds** — inclusive/exclusive ranges, one-sided bounds, and outside-range checks for all arithmetic types
 - **String checkers** — compile-time patterns via [CTRE](https://github.com/hanickadot/compile-time-regular-expressions), runtime `std::regex`, and common presets (`email_like`, `uri_like`, `non_empty`, …)
 - **Modern assertions** — `vd::require` with `std::format` messages, source-location diagnostics, optional exception throwing, and custom callbacks
+- **Non-null pointer contract** — `vd::not_null<T*>` enforces that a raw pointer parameter is never `nullptr`, checked at compile time or runtime
 - **Qt extension** — `QString` / `QStringView` checkers and `Q_PROPERTY` validation for Qt 5/6 projects
 
 ## Requirements
@@ -105,10 +106,10 @@ struct result {
     bool is_valid;
     std::vector<std::string> failed_rules;
 
-    operator bool() const;          // if (result) { … }
-    std::string format() const;     // numbered multiline report
+    operator bool() const;            // if (result) { … }
+    std::string format() const;       // numbered multiline report
     std::string short_format() const; // comma-separated single line
-    void die_if_failed() const;     // throws vd::validation_exception if not valid
+    void die_if_failed() const;       // throws vd::validation_exception if not valid
 
     static result ok();
     static result failed(std::vector<std::string> messages);
@@ -117,7 +118,9 @@ struct result {
 
 ### Models
 
-The core abstraction is `vd::basic_model<T>` — a collection of `vd::rule<T>` predicates. `is_valid()` runs **all** rules and aggregates every failure message into the returned `vd::result`; it does not stop at the first failure.
+The core abstraction is `vd::basic_model<T>` — a collection of `vd::rule<T>` predicates.
+
+`check()` runs **all** rules and aggregates every failure message into the returned `vd::result`; it does not stop at the first failure. `short_check()` is the fail-fast variant — it stops on the first failing rule and is cheaper when only a pass/fail answer is needed.
 
 ```cpp
 // Build a model
@@ -127,19 +130,22 @@ auto model = vd::basic_model<Point>()
     .with(vd::predicate([](const Point& p) { return p.x != p.y; }));
 
 // Validate — all rules run, all failures collected
-vd::result r = model.is_valid(point);     // by reference
-vd::result r = model.is_valid(&point);    // by pointer (nullptr → result(false))
+vd::result r = model.check(point);     // by reference
+vd::result r = model.check(&point);    // by pointer (nullptr → result(false))
 
 if (!r) {
-    std::cerr << r.format();              // print all failure reasons
+    std::cerr << r.format();           // print all failure reasons
 }
+
+// Fail-fast — stops on first failure
+vd::result r = model.short_check(point);
 
 // Throw vd::validation_exception on failure
 model.die_if_failed(point);
 
-// Bind model to an object
+// Bind model to an object for repeated checks
 auto bound = model.bind(point);
-vd::result r = bound.is_valid();
+vd::result r = bound.check();
 ```
 
 **Rule factories:**
@@ -162,6 +168,24 @@ bool all_ok = vd::validate_many(model, a, b, c);             // variadic
 bool all_ok = vd::validate_many(model, vec_of_objects);       // std::vector<T>
 bool all_ok = vd::validate_many(model, vec_of_pointers);      // std::vector<T*>
 ```
+
+### `vd::not_null<T*>`
+
+A lightweight contract wrapper that enforces a raw pointer is never `nullptr`. Intended as a function parameter type to express the non-null precondition in the signature itself.
+
+```cpp
+void process(vd::not_null<Widget*> w) {
+    w->do_something();  // safe to dereference, contract checked at call site
+}
+
+Widget* ptr = get_widget();
+process(ptr);           // compiles — checked at runtime, terminates if nullptr
+process(nullptr);       // does not compile — nullptr_t overload is deleted
+```
+
+Construction from a null pointer in a `constexpr` context is a compile error; at runtime it calls `std::terminate()` with a diagnostic message on `stderr`.
+
+`not_null<T*>` supports `*`, `->`, implicit conversion to `T*`, and comparison operators. It does not transfer ownership.
 
 ### Numeric bounds
 
@@ -198,7 +222,7 @@ vd::string_rules::regex(R"(\d{5})")       // runtime std::regex (full-string mat
 
 All checkers accept `std::string_view` and return `vd::result`. `std::string` fields work without explicit conversion.
 
-### Assert module
+### `vd::require`
 
 `vd::require` is a type-safe, source-aware replacement for `assert()`.
 
@@ -280,32 +304,6 @@ namespace my_rules {
         };
     }
 }
-```
-
-## Project structure
-
-```
-src/
-├── vd.hxx                    # Single public header
-├── assert/vd_assert.hxx      # vd::require / vd::require_callback
-├── core/
-│   ├── vd_result.hxx         # vd::result
-│   ├── vd_exception.hxx      # vd::validation_exception
-│   └── vd_defines.hxx        # Attribute macros (VD_NODISCARD, etc.)
-├── models/
-│   ├── vd_rule.hxx           # rule<T>, value_checker concept
-│   ├── vd_rule_factory.hxx   # vd::field(), vd::member(), vd::predicate()
-│   ├── vd_basic_model.hxx    # basic_model<T>, basic_bound_model<T>, validate_many()
-│   ├── vd_numeric.hxx        # numeric_bounds<T> and type aliases
-│   └── vd_string_rules.hxx   # string_match, regex_checker, factories
-├── utils/vd_ctnextafter.hxx  # constexpr ct_nextafter<T> + generic_numer concept
-└── inline_deps/ctre.hpp      # Bundled CTRE (compile-time regex)
-
-ext/qt/
-├── vd_qtbase.hxx             # Aggregate Qt Base header
-└── qtbase/
-    ├── vd_qstring.hxx        # qstring_match, qregex_checker, factories
-    └── vd_qproperty.hxx      # qt_property()
 ```
 
 ## License

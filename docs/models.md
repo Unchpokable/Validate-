@@ -12,7 +12,7 @@
 
 ```
 rule<T>              — единичное правило: const T& -> vd::result
-basic_model<T>       — набор правил + метод is_valid()
+basic_model<T>       — набор правил + методы check() / short_check()
 basic_bound_model<T> — модель, привязанная к конкретному объекту
 ```
 
@@ -46,7 +46,7 @@ vd::result operator()(const T& obj) const;
 vd::result operator()(const T* obj) const;  // разыменовывает и вызывает reference-версию
 ```
 
-Оба перегруза существуют, чтобы `basic_model::is_valid(const T*)` мог вызвать правило через указатель без лишнего кода.
+Оба перегруза существуют, чтобы `basic_model::check(const T*)` мог вызвать правило через указатель без лишнего кода.
 
 ---
 
@@ -174,14 +174,25 @@ vd::basic_model<T> model;
 model.with(rule1).with(rule2);  // возвращает basic_model&
 ```
 
-### `is_valid()`
+### `check()`
 
 ```cpp
-vd::result is_valid(const T& object) const;
-vd::result is_valid(const T* object) const;
+vd::result check(const T& object) const;
+vd::result check(const T* object) const;
 ```
 
 Запускает **все** правила подряд и агрегирует результаты через `result::with_other()`. Не останавливается на первом провале — собирает сообщения от всех сработавших правил. Пустая модель возвращает `result::ok()`.
+
+Если `object == nullptr`, возвращает `result(false)` без запуска правил.
+
+### `short_check()`
+
+```cpp
+vd::result short_check(const T& object) const;
+vd::result short_check(const T* object) const;
+```
+
+Fail-fast вариант `check()`. Останавливается на первом провалившемся правиле и немедленно возвращает результат. Используется, когда достаточно знать факт наличия ошибки без полного отчёта — например, при построчной проверке в форме или в горячем пути.
 
 Если `object == nullptr`, возвращает `result(false)` без запуска правил.
 
@@ -192,7 +203,7 @@ void die_if_failed(const T& object) const;
 void die_if_failed(const T* object) const;
 ```
 
-Вызывает `is_valid()` и, если результат не валиден, бросает `vd::validation_exception`.
+Вызывает `check()` и, если результат не валиден, бросает `vd::validation_exception`.
 
 ### `add_rule()`
 
@@ -213,17 +224,19 @@ vd::basic_model<Point> model = /* ... */;
 Point p{3.0, 4.0};
 
 auto bound = model.bind(p);
-bool ok = bound.is_valid();  // эквивалентно model.is_valid(p)
+vd::result r = bound.check();        // эквивалентно model.check(p)
+vd::result r = bound.short_check();  // эквивалентно model.short_check(p)
 ```
 
-### `is_valid()` / `die_if_failed()`
+### `check()` / `short_check()` / `die_if_failed()`
 
 ```cpp
-vd::result is_valid() const;
+vd::result check() const;
+vd::result short_check() const;
 void die_if_failed() const;
 ```
 
-Делегируют в `m_model.is_valid(m_object)` и `m_model.die_if_failed(m_object)` соответственно.
+Делегируют в `m_model.check(m_object)`, `m_model.short_check(m_object)` и `m_model.die_if_failed(m_object)` соответственно.
 
 ### Важное ограничение: non-owning ссылка
 
@@ -233,15 +246,13 @@ void die_if_failed() const;
 // Корректно: model живёт дольше bound
 auto model = vd::basic_model<Point>().with(...);
 auto bound = model.bind(point);
-bound.is_valid();  // OK
+bound.check();  // OK
 
 // Некорректно: dangling reference
-auto bound = vd::basic_model<Point>().with(...).bind(point);
-//           ^^^^^^^^^^^^^^^^^^^^^^^^ временная модель уничтожена до bind!
-bound.is_valid();  // UB: ссылка висит
+auto bound = vd::basic_model<Point>().with(...).bind(point); // Невозможно, rvalue-qualified перегрузка bind() удалена
 ```
 
-Если нужна независимость от времени жизни исходной модели — вызывайте `model.is_valid(point)` напрямую.
+Если нужна независимость от времени жизни исходной модели — вызывайте `model.check(point)` напрямую.
 
 ### `bind()` и nullptr
 

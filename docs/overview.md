@@ -20,7 +20,7 @@ auto user_model = vd::basic_model<User>()
     .with(vd::member(&User::salary, vd::double_bounds::greater_than(0.0)));
 
 User u{"Alice", "alice@example.com", 30, 75000.0};
-vd::result ok = user_model.is_valid(u);   // ok.is_valid == true
+vd::result ok = user_model.check(u);   // ok.is_valid == true
 ```
 
 ## Требования
@@ -54,6 +54,7 @@ src/
 ├── core/
 │   ├── vd_result.hxx          # vd::result — тип результата валидации
 │   ├── vd_exception.hxx       # vd::validation_exception и vd_tagged_exception<>
+│   ├── vd_not_null.hxx        # vd::not_null<T*> — ненулевой указатель-контракт
 │   ├── vd_defines.hxx         # Макросы атрибутов: VD_LIKELY, VD_NODISCARD и т.д.
 │   ├── vd_always_false.hxx    # Вспомогательный трейт always_false<T> для static_assert
 │   └── vd_macro.hxx           # Макросы VD_MEMBER / VD_FIELD (только при VD_EXPORT_UNSAFE)
@@ -90,6 +91,7 @@ docs/
 ├── overview.md                # Этот файл
 ├── assert.md                  # Assert module
 ├── models.md                  # rule, basic_model, basic_bound_model
+├── not_null.md                # not_null<T*>
 ├── numeric.md                 # numeric_bounds
 ├── string-rules.md            # string_rules
 └── qt extensions.md           # Qt extensions (QString, QProperty)
@@ -100,9 +102,10 @@ docs/
 | Концепт | Что это |
 |---------|---------|
 | `rule<T>` | Единичный предикат для объекта типа `T`. Хранит type-erased callable `const T& -> vd::result`. |
-| `basic_model<T>` | Коллекция `rule<T>`. Запускает все правила при `is_valid()` и собирает ошибки. |
+| `basic_model<T>` | Коллекция `rule<T>`. `check()` запускает все правила и собирает ошибки; `short_check()` — fail-fast вариант, останавливается на первой ошибке. |
 | `basic_bound_model<T>` | Связка модели с конкретным объектом. |
 | `vd::result` | Тип результата валидации: `bool is_valid` + `vector<string> failed_rules`. Конвертируется в `bool`. |
+| `vd::not_null<T*>` | Обёртка над сырым указателем: гарантирует, что значение никогда не равно `nullptr`. Предназначена для использования в сигнатурах функций. |
 | `value_checker` | Концепт: callable `V -> bool` (или `V -> vd::result`, т.к. он конвертируется в `bool`). Используется как второй аргумент фабрик `field`/`member`. |
 | `numeric_bounds<T>` | Реализует `value_checker` для числовых типов. |
 | `string_match<Matcher>` | Реализует `value_checker` для строк через NTTP-матчер. |
@@ -118,10 +121,11 @@ vd::rule<T>
 vd::basic_model<T>
     ← содержит: std::vector<rule<T>>
     ← строится через: .with(rule), .with({rules...}), .with(other_model)
-    ← вызывает: is_valid(const T&) / is_valid(const T*) → vd::result (все правила, не fail-fast)
+    ← вызывает: check(const T&) / check(const T*) → vd::result (все правила, все ошибки)
+    ←           short_check(const T&)              → vd::result (fail-fast: первая ошибка)
 
 vd::result
-    ← возвращается из: is_valid(), rule::operator()(), checker-ов
+    ← возвращается из: check(), short_check(), rule::operator()(), checker-ов
     ← методы: format(), short_format(), die_if_failed(), operator bool()
 
 value_checker (концепт)

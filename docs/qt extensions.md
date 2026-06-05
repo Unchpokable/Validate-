@@ -244,7 +244,19 @@ vd::rule<Widget> r([](const Widget& w) {
 
 ## Подключение
 
-Модуль **не включается** через `<vd.hxx>` автоматически — Qt-заголовки требуют наличия Qt в проекте сборки. Подключайте явно:
+Модуль включается через `<vd.hxx>` **автоматически**, когда CMake-опция `VD_EXTENSION_QT_BASE` установлена в `ON`. В этом случае компилятор получает макрос `VD_ENABLE_EXTENSION_QT_BASE`, и `vd_ext.hxx` подтягивает `vd_qtbase.hxx` в рамках основного заголовка.
+
+```cmake
+set(VD_EXTENSION_QT_BASE ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(Validate)
+target_link_libraries(my_target PRIVATE Validate::vd Qt6::Core)
+```
+
+```cpp
+#include <vd.hxx>  // Qt extensions уже внутри
+```
+
+При необходимости подмодули можно включить явно (например, в проектах без FetchContent):
 
 ```cpp
 // Весь qtbase (QString + QProperty):
@@ -255,12 +267,6 @@ vd::rule<Widget> r([](const Widget& w) {
 
 // Только qt_property:
 #include "ext/qt/qtbase/vd_qproperty.hxx"
-```
-
-В CMakeLists.txt проект должен линковаться с `Qt::Core`:
-
-```cmake
-target_link_libraries(my_target PRIVATE Qt::Core)
 ```
 
 ---
