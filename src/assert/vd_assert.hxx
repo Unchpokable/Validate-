@@ -29,8 +29,11 @@ struct assert_format {
 namespace vd::detail
 {
 template<typename T>
-concept contextually_bool = requires(T&& t) {
-    { static_cast<T&&>(t) ? 0 : 0 };
+concept __contextually_bool_impl = requires(T& t) { static_cast<bool>(t); };
+
+template<typename T>
+concept contextually_bool = __contextually_bool_impl<T> && requires(T& t) {
+    { !t } -> __contextually_bool_impl;
 };
 } // namespace vd::detail
 

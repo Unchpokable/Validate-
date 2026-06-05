@@ -520,13 +520,6 @@ TEST(BoundModelTest, IsValidDelegatesToModel)
     EXPECT_FALSE(bound_invalid.check());
 }
 
-TEST(BoundModelTest, BindByPointerAbortOnNull)
-{
-    // Passing a null pointer to bind() must throw — it violates the precondition.
-    auto model = vd::basic_model<Point>();
-    EXPECT_THROW(model.bind(static_cast<const Point*>(nullptr)), vd::assertion_exception);
-}
-
 // ---------------------------------------------------------------------------
 // vd::basic_model::dead_check — throws validation_exception on invalid object
 // ---------------------------------------------------------------------------

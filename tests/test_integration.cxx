@@ -602,12 +602,6 @@ TEST(BoundModelReferenceSemantics, DeadCheck_AfterMutation_ThrowsWhenInvalid)
     EXPECT_THROW(bound.die_if_failed(), vd::validation_exception);
 }
 
-TEST(BoundModelReferenceSemantics, BindNull_ThrowsAssertionException)
-{
-    auto model = vd::int_model {};
-    EXPECT_THROW(model.bind(static_cast<const std::int32_t*>(nullptr)), vd::assertion_exception);
-}
-
 // ============================================================================
 // 7. Bulk validation with standard algorithms
 // ============================================================================

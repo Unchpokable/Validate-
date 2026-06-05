@@ -3,11 +3,19 @@
 #ifndef VD_NOT_NULL_HXX
 #define VD_NOT_NULL_HXX
 
+#include <cstdio>
+#include <exception>
 #include <type_traits>
 
-#include "assert/vd_assert.hxx"
+namespace vd::detail
+{
 
-#include "core/vd_exception.hxx"
+[[noreturn]] inline void terminate_on_nullptr()
+{
+    std::fputs("not_null cannot be constructed with nullptr\n", stderr);
+    std::terminate();
+}
+} // namespace vd::detail
 
 namespace vd
 {
@@ -25,7 +33,16 @@ struct not_null final {
 
     constexpr not_null(pointer_type ptr) : m_ptr(ptr)
     {
-        vd::ct_require<vd::assertion_exception>(m_ptr != nullptr, "not_null cannot be constructed with nullptr");
+        if(std::is_constant_evaluated()) {
+            if(ptr == nullptr) {
+                throw "not_null cannot be constructed with nullptr";
+            }
+        }
+        else {
+            if(ptr == nullptr) [[unlikely]] {
+                vd::detail::terminate_on_nullptr();
+            }
+        }
     }
 
     template<typename U>
@@ -44,7 +61,17 @@ struct not_null final {
 
     constexpr not_null& operator=(pointer_type ptr)
     {
-        vd::ct_require<vd::assertion_exception>(ptr != nullptr, "not_null cannot be assigned nullptr");
+        if(std::is_constant_evaluated()) {
+            if(ptr == nullptr) {
+                throw "not_null cannot be constructed with nullptr";
+            }
+        }
+        else {
+            if(ptr == nullptr) [[unlikely]] {
+                vd::detail::terminate_on_nullptr();
+            }
+        }
+
         m_ptr = ptr;
         return *this;
     }
@@ -54,24 +81,12 @@ struct not_null final {
         return m_ptr;
     }
 
-    constexpr const_reference_type operator*() const noexcept
+    constexpr reference_type operator*() const noexcept
     {
         return *m_ptr;
     }
 
-    constexpr reference_type operator*() noexcept
-    requires(!std::is_const_v<object_type>)
-    {
-        return *m_ptr;
-    }
-
-    constexpr const_pointer_type operator->() const noexcept
-    {
-        return m_ptr;
-    }
-
-    constexpr pointer_type operator->() noexcept
-    requires(!std::is_const_v<object_type>)
+    constexpr pointer_type operator->() const noexcept
     {
         return m_ptr;
     }
@@ -81,11 +96,8 @@ struct not_null final {
         return m_ptr;
     }
 
-    constexpr operator const_pointer_type() const noexcept
-    requires(!std::is_const_v<object_type>)
-    {
-        return m_ptr;
-    }
+    friend constexpr auto operator<=>(not_null, not_null) = default;
+    friend constexpr bool operator==(not_null, not_null) = default;
 
 private:
     pointer_type m_ptr;
