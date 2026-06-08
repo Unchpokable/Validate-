@@ -1,6 +1,9 @@
 # GRIMFORGE specific project files
 build/
 
+# Personal Claude Code instructions (not for team sharing)
+CLAUDE.local.md
+
 CMakeLists.txt.user
 CMakeCache.txt
 CMakeFiles
