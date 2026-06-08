@@ -3,13 +3,13 @@
 #ifndef VD_NOT_NULL_HXX
 #define VD_NOT_NULL_HXX
 
+#include <concepts>
 #include <cstdio>
 #include <exception>
 #include <type_traits>
 
 namespace vd::detail
 {
-
 [[noreturn]] inline void terminate_on_nullptr()
 {
     std::fputs("not_null cannot be constructed with nullptr\n", stderr);
@@ -40,6 +40,24 @@ struct not_null final {
         }
         else {
             if(ptr == nullptr) [[unlikely]] {
+                vd::detail::terminate_on_nullptr();
+            }
+        }
+    }
+
+    template<typename SmartPtr>
+    requires requires(const SmartPtr& ptr) {
+        { ptr.get() } -> std::convertible_to<pointer_type>;
+    }
+    constexpr not_null(const SmartPtr& ptr) : m_ptr(ptr.get())
+    {
+        if(std::is_constant_evaluated()) {
+            if(m_ptr == nullptr) {
+                throw "not_null cannot be constructed with nullptr";
+            }
+        }
+        else {
+            if(m_ptr == nullptr) [[unlikely]] {
                 vd::detail::terminate_on_nullptr();
             }
         }

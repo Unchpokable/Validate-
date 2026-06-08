@@ -1,7 +1,9 @@
 #include "models/vd_numeric.hxx"
+#include "models/vd_rule_factory.hxx"
 #include "gtest/gtest.h"
 #include <gtest/gtest.h>
 #include <limits>
+#include <memory>
 
 #define VD_EXPORT_UNSAFE
 #include <vd.hxx>
@@ -972,4 +974,89 @@ TEST(MemberAndFieldMacros, GeneratedFieldNameCorrect)
     auto contains_field_name = verdict.failed_rules[0];
 
     EXPECT_NE(contains_field_name.find("x"), std::string::npos);
+}
+
+struct CustomType {
+    int value;
+};
+
+struct TypeWithPointerField {
+    int* ptr;
+    CustomType* other_ptr;
+};
+
+struct TypeWithSharedPtrField {
+    std::shared_ptr<int> ptr;
+};
+
+struct TypeWithUniquePtrField {
+    std::unique_ptr<int> ptr;
+};
+
+struct TypeWithUniquePtrFieldWithGetter {
+    std::unique_ptr<int> ptr;
+
+    const std::unique_ptr<int>& get_ptr() const
+    {
+        return ptr;
+    }
+};
+
+TEST(MemoryModels, NotNullCheckerRejectsNullPointer)
+{
+    auto model = vd::basic_model<TypeWithPointerField>().with(vd::member(&TypeWithPointerField::ptr, vd::memory::not_null));
+    TypeWithPointerField instance { nullptr, nullptr };
+    EXPECT_FALSE(model.check(instance));
+}
+
+TEST(MemoryModels, NotNullCheckerAcceptsNonNullPointer)
+{
+    int x = 42;
+    auto model = vd::basic_model<TypeWithPointerField>().with(vd::member(&TypeWithPointerField::ptr, vd::memory::not_null));
+    TypeWithPointerField instance { &x, nullptr };
+    EXPECT_TRUE(model.check(instance));
+}
+
+TEST(MemoryModels, NotNullAcceptsSharedPointers)
+{
+    auto model = vd::basic_model<TypeWithSharedPtrField>().with(vd::member(&TypeWithSharedPtrField::ptr, vd::memory::not_null));
+    TypeWithSharedPtrField instance { std::make_shared<int>(42) };
+    EXPECT_TRUE(model.check(instance));
+}
+
+TEST(MemoryModels, NotNullRejectsNullSharedPointer)
+{
+    auto model = vd::basic_model<TypeWithSharedPtrField>().with(vd::member(&TypeWithSharedPtrField::ptr, vd::memory::not_null));
+    TypeWithSharedPtrField instance { nullptr };
+    EXPECT_FALSE(model.check(instance));
+}
+
+TEST(MemoryModels, NotNullAcceptsUniquePointers)
+{
+    auto model = vd::basic_model<TypeWithUniquePtrField>().with(vd::member(&TypeWithUniquePtrField::ptr, vd::memory::not_null));
+    TypeWithUniquePtrField instance { std::make_unique<int>(42) };
+    EXPECT_TRUE(model.check(instance));
+}
+
+TEST(MemoryModels, NotNullRejectsNullUniquePointer)
+{
+    auto model = vd::basic_model<TypeWithUniquePtrField>().with(vd::member(&TypeWithUniquePtrField::ptr, vd::memory::not_null));
+    TypeWithUniquePtrField instance { nullptr };
+    EXPECT_FALSE(model.check(instance));
+}
+
+TEST(MemoryModels, NotNullRejectsNullUniquePointerViaField)
+{
+    auto model = vd::basic_model<TypeWithUniquePtrFieldWithGetter>().with(
+        vd::field(&TypeWithUniquePtrFieldWithGetter::get_ptr, vd::memory::not_null));
+    TypeWithUniquePtrFieldWithGetter instance { nullptr };
+    EXPECT_FALSE(model.check(instance));
+}
+
+TEST(MemoryModels, NotNullAcceptsNonNullUniquePointerViaField)
+{
+    auto model = vd::basic_model<TypeWithUniquePtrFieldWithGetter>().with(
+        vd::field(&TypeWithUniquePtrFieldWithGetter::get_ptr, vd::memory::not_null));
+    TypeWithUniquePtrFieldWithGetter instance { std::make_unique<int>(42) };
+    EXPECT_TRUE(model.check(instance));
 }

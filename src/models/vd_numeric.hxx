@@ -3,6 +3,7 @@
 #ifndef VD_NUMERIC_HXX
 #define VD_NUMERIC_HXX
 
+#include <cmath>
 #include <format>
 #include <limits>
 #include <type_traits>

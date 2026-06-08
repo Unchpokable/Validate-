@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <sstream>
 
 #include "core/vd_exception.hxx"
