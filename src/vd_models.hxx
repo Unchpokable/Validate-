@@ -8,6 +8,7 @@
 #include "models/vd_numeric.hxx"
 #include "models/vd_rule.hxx"
 #include "models/vd_rule_factory.hxx"
+#include "models/vd_static_model.hxx"
 #include "models/vd_string_rules.hxx"
 
 

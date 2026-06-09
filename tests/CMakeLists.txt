@@ -26,15 +26,19 @@ target_link_libraries(test_integration PRIVATE Validate::vd GTest::gtest_main)
 add_executable(test_not_null test_not_null.cxx)
 target_link_libraries(test_not_null PRIVATE Validate::vd GTest::gtest_main)
 
+add_executable(test_static_model test_static_model.cxx)
+target_link_libraries(test_static_model PRIVATE Validate::vd GTest::gtest_main)
+
 include(GoogleTest)
 # PRE_TEST: defer test discovery to ctest run time.
 # When Qt extensions are enabled, vd.lib carries a Qt6Core dependency so the
 # test binaries need Qt DLLs on PATH — which is not guaranteed during MSBuild.
-gtest_discover_tests(test_assert       DISCOVERY_MODE PRE_TEST)
-gtest_discover_tests(test_models       DISCOVERY_MODE PRE_TEST)
-gtest_discover_tests(test_string_rules DISCOVERY_MODE PRE_TEST)
-gtest_discover_tests(test_integration  DISCOVERY_MODE PRE_TEST)
-gtest_discover_tests(test_not_null     DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(test_assert        DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(test_models        DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(test_string_rules  DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(test_integration   DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(test_not_null      DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(test_static_model  DISCOVERY_MODE PRE_TEST)
 
 if(VD_EXTENSION_QT_BASE)
     add_executable(test_qt_property test_qt_property.cxx)
