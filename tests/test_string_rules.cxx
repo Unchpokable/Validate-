@@ -91,6 +91,35 @@ TEST(StringRulesEmptyOrWhitespaceTest, RejectsStringWithContent)
 }
 
 // ---------------------------------------------------------------------------
+// Generic CharT support
+// empty(), non_empty() and empty_or_whitespace() work with any
+// std::basic_string_view<CharT> / std::basic_string<CharT>, not just char.
+// ---------------------------------------------------------------------------
+
+TEST(StringRulesGenericCharTest, EmptyWorksWithWideStrings)
+{
+    EXPECT_TRUE(vd::string_rules::empty()(std::wstring_view(L"")));
+    EXPECT_FALSE(vd::string_rules::empty()(std::wstring_view(L"x")));
+    EXPECT_TRUE(vd::string_rules::empty()(std::wstring(L"")));
+}
+
+TEST(StringRulesGenericCharTest, NonEmptyWorksWithUtf16AndUtf32)
+{
+    EXPECT_TRUE(vd::string_rules::non_empty()(std::u16string_view(u"hello")));
+    EXPECT_FALSE(vd::string_rules::non_empty()(std::u16string_view(u"")));
+    EXPECT_TRUE(vd::string_rules::non_empty()(std::u32string_view(U"hello")));
+    EXPECT_FALSE(vd::string_rules::non_empty()(std::u32string_view(U"")));
+}
+
+TEST(StringRulesGenericCharTest, EmptyOrWhitespaceWorksWithWideStrings)
+{
+    EXPECT_TRUE(vd::string_rules::empty_or_whitespace()(std::wstring_view(L"")));
+    EXPECT_TRUE(vd::string_rules::empty_or_whitespace()(std::wstring_view(L"  \t\n")));
+    EXPECT_FALSE(vd::string_rules::empty_or_whitespace()(std::wstring_view(L"x")));
+    EXPECT_TRUE(vd::string_rules::empty_or_whitespace()(std::wstring(L" ")));
+}
+
+// ---------------------------------------------------------------------------
 // string_rules::email_like
 // Minimal heuristic: expects \S+@\S+\.\S+
 // ---------------------------------------------------------------------------
@@ -242,4 +271,33 @@ TEST(StringRulesModelTest, RegexCheckerWorksWithMember)
     EXPECT_TRUE(model.check(Profile { "Alice123", "", "" }));
     EXPECT_FALSE(model.check(Profile { "Alice 123", "", "" })); // space not allowed
     EXPECT_FALSE(model.check(Profile { "", "", "" }));          // empty doesn't match \w+
+}
+
+TEST(StringRulesModelTest, MaxLengthCheckerWorksWithField)
+{
+    // Validate that the email is at most 20 characters long, using vd::field with a getter.
+    auto model = vd::basic_model<Profile>().with(vd::field(&Profile::get_email, vd::string_rules::max_length(20)));
+
+    EXPECT_TRUE(model.check(Profile { "", "user@ex.com", "" }));
+    EXPECT_FALSE(model.check(Profile { "", "verylongemail@example.com", "" }));
+}
+
+TEST(StringRulesModelTest, MinLengthCheckerWorksWithMember)
+{
+    // Validate that the website is at least 5 characters long.
+    auto model = vd::basic_model<Profile>().with(vd::member(&Profile::website, vd::string_rules::min_length(5)));
+
+    EXPECT_TRUE(model.check(Profile { "", "", "http://example.com" }));
+    EXPECT_FALSE(model.check(Profile { "", "", "a" }));
+    EXPECT_FALSE(model.check(Profile { "", "", "" }));
+}
+
+TEST(StringRulesModelTest, LengthInBetweenCheckerWorksWithField)
+{
+    // Validate that the name is between 3 and 10 characters long, using vd::field with a getter.
+    auto model = vd::basic_model<Profile>().with(vd::field(&Profile::get_name, vd::string_rules::length_in_between(3, 10)));
+
+    EXPECT_TRUE(model.check(Profile { "Alice", "", "" }));
+    EXPECT_FALSE(model.check(Profile { "Al", "", "" }));          // too short
+    EXPECT_FALSE(model.check(Profile { "Aliceeeeeee", "", "" })); // too long
 }
