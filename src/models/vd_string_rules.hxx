@@ -132,9 +132,18 @@ struct max_length_t final {
     }
 
     template<class CharT, class Traits>
-    bool operator()(std::basic_string_view<CharT, Traits> s) const
+    vd::result operator()(std::basic_string_view<CharT, Traits> s) const
     {
-        return s.size() <= max_len;
+        if(s.size() > max_len) {
+            return vd::result::failed({ "string length exceeds the maximum allowed" });
+        }
+        return vd::result::ok();
+    }
+
+    template<class CharT, class Traits>
+    vd::result operator()(const std::basic_string<CharT, Traits>& s) const
+    {
+        return (*this)(std::basic_string_view<CharT, Traits>(s));
     }
 };
 
@@ -149,9 +158,18 @@ struct min_length_t final {
     }
 
     template<class CharT, class Traits>
-    bool operator()(std::basic_string_view<CharT, Traits> s) const
+    vd::result operator()(std::basic_string_view<CharT, Traits> s) const
     {
-        return s.size() >= min_len;
+        if(s.size() < min_len) {
+            return vd::result::failed({ "string length is less than the minimum allowed" });
+        }
+        return vd::result::ok();
+    }
+
+    template<class CharT, class Traits>
+    vd::result operator()(const std::basic_string<CharT, Traits>& s) const
+    {
+        return (*this)(std::basic_string_view<CharT, Traits>(s));
     }
 };
 
@@ -169,9 +187,18 @@ struct length_in_between_t final {
     }
 
     template<class CharT, class Traits>
-    bool operator()(std::basic_string_view<CharT, Traits> s) const
+    vd::result operator()(std::basic_string_view<CharT, Traits> s) const
     {
-        return s.size() >= min_len && s.size() <= max_len;
+        if(s.size() < min_len || s.size() > max_len) {
+            return vd::result::failed({ "string length is not within the specified range" });
+        }
+        return vd::result::ok();
+    }
+
+    template<class CharT, class Traits>
+    vd::result operator()(const std::basic_string<CharT, Traits>& s) const
+    {
+        return (*this)(std::basic_string_view<CharT, Traits>(s));
     }
 };
 

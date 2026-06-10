@@ -272,3 +272,32 @@ TEST(StringRulesModelTest, RegexCheckerWorksWithMember)
     EXPECT_FALSE(model.check(Profile { "Alice 123", "", "" })); // space not allowed
     EXPECT_FALSE(model.check(Profile { "", "", "" }));          // empty doesn't match \w+
 }
+
+TEST(StringRulesModelTest, MaxLengthCheckerWorksWithField)
+{
+    // Validate that the email is at most 20 characters long, using vd::field with a getter.
+    auto model = vd::basic_model<Profile>().with(vd::field(&Profile::get_email, vd::string_rules::max_length(20)));
+
+    EXPECT_TRUE(model.check(Profile { "", "user@ex.com", "" }));
+    EXPECT_FALSE(model.check(Profile { "", "verylongemail@example.com", "" }));
+}
+
+TEST(StringRulesModelTest, MinLengthCheckerWorksWithMember)
+{
+    // Validate that the website is at least 5 characters long.
+    auto model = vd::basic_model<Profile>().with(vd::member(&Profile::website, vd::string_rules::min_length(5)));
+
+    EXPECT_TRUE(model.check(Profile { "", "", "http://example.com" }));
+    EXPECT_FALSE(model.check(Profile { "", "", "a" }));
+    EXPECT_FALSE(model.check(Profile { "", "", "" }));
+}
+
+TEST(StringRulesModelTest, LengthInBetweenCheckerWorksWithField)
+{
+    // Validate that the name is between 3 and 10 characters long, using vd::field with a getter.
+    auto model = vd::basic_model<Profile>().with(vd::field(&Profile::get_name, vd::string_rules::length_in_between(3, 10)));
+
+    EXPECT_TRUE(model.check(Profile { "Alice", "", "" }));
+    EXPECT_FALSE(model.check(Profile { "Al", "", "" }));          // too short
+    EXPECT_FALSE(model.check(Profile { "Aliceeeeeee", "", "" })); // too long
+}
