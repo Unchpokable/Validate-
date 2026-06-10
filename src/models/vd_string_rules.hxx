@@ -44,7 +44,7 @@ struct string_match {
 
     // Generic basic_string_view for any CharT other than char (wchar_t, char8_t, char16_t, char32_t).
     // CharT == char is excluded so it never competes with the non-template overload above.
-    template<class CharT, class Traits>
+    template<typename CharT, typename Traits>
     requires(!std::same_as<CharT, char>) && std::invocable<decltype(Matcher), std::basic_string_view<CharT, Traits>>
             && std::convertible_to<std::invoke_result_t<decltype(Matcher), std::basic_string_view<CharT, Traits>>, bool>
     vd::result operator()(std::basic_string_view<CharT, Traits> s) const
@@ -55,7 +55,7 @@ struct string_match {
     // std::basic_string<CharT> for CharT other than char (e.g. std::wstring), forwarded as a view.
     // Deduction guides can't convert basic_string -> basic_string_view, so this overload exists
     // to cover that case explicitly (the char/std::string case is handled by the overload above).
-    template<class CharT, class Traits, class Alloc>
+    template<typename CharT, typename Traits, typename Alloc>
     requires(!std::same_as<CharT, char>)
     vd::result operator()(const std::basic_string<CharT, Traits, Alloc>& s) const
     {
@@ -87,7 +87,7 @@ struct regex_checker {
 namespace vd::string_rules::detail
 {
 struct empty_string_t {
-    template<class CharT, class Traits>
+    template<typename CharT, typename Traits>
     constexpr bool operator()(std::basic_string_view<CharT, Traits> s) const
     {
         return s.empty();
@@ -96,7 +96,7 @@ struct empty_string_t {
 inline constexpr empty_string_t empty_string {};
 
 struct non_empty_string_t {
-    template<class CharT, class Traits>
+    template<typename CharT, typename Traits>
     constexpr bool operator()(std::basic_string_view<CharT, Traits> s) const
     {
         return !s.empty();
@@ -111,7 +111,7 @@ constexpr bool email_like(std::string_view s)
 }
 
 struct empty_or_whitespace_string_t {
-    template<class CharT, class Traits>
+    template<typename CharT, typename Traits>
     constexpr bool operator()(std::basic_string_view<CharT, Traits> s) const
     {
         return std::all_of(s.begin(), s.end(), [](CharT c) {
@@ -131,7 +131,7 @@ struct max_length_t final {
         vd::ct_require<vd::assertion_exception>(max_len > 0, "max_len must be positive");
     }
 
-    template<class CharT, class Traits>
+    template<typename CharT, typename Traits>
     vd::result operator()(std::basic_string_view<CharT, Traits> s) const
     {
         if(s.size() > max_len) {
@@ -140,8 +140,8 @@ struct max_length_t final {
         return vd::result::ok();
     }
 
-    template<class CharT, class Traits>
-    vd::result operator()(const std::basic_string<CharT, Traits>& s) const
+    template<typename CharT, typename Traits, typename Alloc>
+    vd::result operator()(const std::basic_string<CharT, Traits, Alloc>& s) const
     {
         return (*this)(std::basic_string_view<CharT, Traits>(s));
     }
@@ -157,7 +157,7 @@ struct min_length_t final {
         vd::ct_require<vd::assertion_exception>(min_len > 0, "min_len must be positive");
     }
 
-    template<class CharT, class Traits>
+    template<typename CharT, typename Traits>
     vd::result operator()(std::basic_string_view<CharT, Traits> s) const
     {
         if(s.size() < min_len) {
@@ -166,8 +166,8 @@ struct min_length_t final {
         return vd::result::ok();
     }
 
-    template<class CharT, class Traits>
-    vd::result operator()(const std::basic_string<CharT, Traits>& s) const
+    template<typename CharT, typename Traits, typename Alloc>
+    vd::result operator()(const std::basic_string<CharT, Traits, Alloc>& s) const
     {
         return (*this)(std::basic_string_view<CharT, Traits>(s));
     }
@@ -186,7 +186,7 @@ struct length_in_between_t final {
         vd::ct_require<vd::assertion_exception>(max_len >= min_len, "max_len must be greater than or equal to min_len");
     }
 
-    template<class CharT, class Traits>
+    template<typename CharT, typename Traits>
     vd::result operator()(std::basic_string_view<CharT, Traits> s) const
     {
         if(s.size() < min_len || s.size() > max_len) {
@@ -195,8 +195,8 @@ struct length_in_between_t final {
         return vd::result::ok();
     }
 
-    template<class CharT, class Traits>
-    vd::result operator()(const std::basic_string<CharT, Traits>& s) const
+    template<typename CharT, typename Traits, typename Alloc>
+    vd::result operator()(const std::basic_string<CharT, Traits, Alloc>& s) const
     {
         return (*this)(std::basic_string_view<CharT, Traits>(s));
     }
