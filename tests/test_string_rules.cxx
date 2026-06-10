@@ -91,6 +91,35 @@ TEST(StringRulesEmptyOrWhitespaceTest, RejectsStringWithContent)
 }
 
 // ---------------------------------------------------------------------------
+// Generic CharT support
+// empty(), non_empty() and empty_or_whitespace() work with any
+// std::basic_string_view<CharT> / std::basic_string<CharT>, not just char.
+// ---------------------------------------------------------------------------
+
+TEST(StringRulesGenericCharTest, EmptyWorksWithWideStrings)
+{
+    EXPECT_TRUE(vd::string_rules::empty()(std::wstring_view(L"")));
+    EXPECT_FALSE(vd::string_rules::empty()(std::wstring_view(L"x")));
+    EXPECT_TRUE(vd::string_rules::empty()(std::wstring(L"")));
+}
+
+TEST(StringRulesGenericCharTest, NonEmptyWorksWithUtf16AndUtf32)
+{
+    EXPECT_TRUE(vd::string_rules::non_empty()(std::u16string_view(u"hello")));
+    EXPECT_FALSE(vd::string_rules::non_empty()(std::u16string_view(u"")));
+    EXPECT_TRUE(vd::string_rules::non_empty()(std::u32string_view(U"hello")));
+    EXPECT_FALSE(vd::string_rules::non_empty()(std::u32string_view(U"")));
+}
+
+TEST(StringRulesGenericCharTest, EmptyOrWhitespaceWorksWithWideStrings)
+{
+    EXPECT_TRUE(vd::string_rules::empty_or_whitespace()(std::wstring_view(L"")));
+    EXPECT_TRUE(vd::string_rules::empty_or_whitespace()(std::wstring_view(L"  \t\n")));
+    EXPECT_FALSE(vd::string_rules::empty_or_whitespace()(std::wstring_view(L"x")));
+    EXPECT_TRUE(vd::string_rules::empty_or_whitespace()(std::wstring(L" ")));
+}
+
+// ---------------------------------------------------------------------------
 // string_rules::email_like
 // Minimal heuristic: expects \S+@\S+\.\S+
 // ---------------------------------------------------------------------------
