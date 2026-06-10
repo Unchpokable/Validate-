@@ -655,3 +655,199 @@ TEST(StaticModelValidateManyTest, ConstPtrVectorNullptrReturnsFalse)
     std::vector<const Point*> ptrs { &a, nullptr };
     EXPECT_FALSE(vd::validate_many(model, ptrs));
 }
+
+// ---------------------------------------------------------------------------
+// StaticModelStaticsFactoryTest
+// vd::statics::field / vd::statics::member return raw lambdas directly
+// (deduced via `auto`), bypassing vd::rule<T> construction and the
+// std::function allocation it implies. These are the factories meant to be
+// paired with static_model for a fully heap-alloc-free pipeline.
+// ---------------------------------------------------------------------------
+
+TEST(StaticModelStaticsFactoryTest, StaticsMemberDoesNotProduceRuleType)
+{
+    auto rule_obj = vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0));
+    auto static_rule = vd::statics::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0));
+
+    static_assert(std::same_as<decltype(rule_obj), vd::rule<Point>>);
+    static_assert(!std::same_as<decltype(static_rule), vd::rule<Point>>);
+}
+
+TEST(StaticModelStaticsFactoryTest, StaticsFieldDoesNotProduceRuleType)
+{
+    auto rule_obj = vd::field(&Point::get_x, vd::double_bounds::greater_than(0.0));
+    auto static_rule = vd::statics::field(&Point::get_x, vd::double_bounds::greater_than(0.0));
+
+    static_assert(std::same_as<decltype(rule_obj), vd::rule<Point>>);
+    static_assert(!std::same_as<decltype(static_rule), vd::rule<Point>>);
+}
+
+TEST(StaticModelStaticsFactoryTest, MemberFactoryAcceptsValidObject)
+{
+    auto model = vd::make_static_model<Point>().with(vd::statics::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+    EXPECT_TRUE(model.check(Point { 5.0, 0.0 }));
+}
+
+TEST(StaticModelStaticsFactoryTest, MemberFactoryRejectsInvalidObject)
+{
+    auto model = vd::make_static_model<Point>().with(vd::statics::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+    EXPECT_FALSE(model.check(Point { -1.0, 0.0 }));
+}
+
+TEST(StaticModelStaticsFactoryTest, MemberFactoryAcceptsBoundaryValues)
+{
+    auto model = vd::make_static_model<Point>().with(vd::statics::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+    EXPECT_TRUE(model.check(Point { 0.0, 0.0 }));
+    EXPECT_TRUE(model.check(Point { 10.0, 0.0 }));
+}
+
+TEST(StaticModelStaticsFactoryTest, FieldFactoryWorksWithGetter)
+{
+    auto model = vd::make_static_model<Point>().with(vd::statics::field(&Point::get_x, vd::double_bounds::greater_than(0.0)));
+    EXPECT_TRUE(model.check(Point { 1.0, 0.0 }));
+    EXPECT_FALSE(model.check(Point { 0.0, 0.0 }));
+    EXPECT_FALSE(model.check(Point { -1.0, 0.0 }));
+}
+
+TEST(StaticModelStaticsFactoryTest, FieldFactoryWorksWithComputedGetter)
+{
+    // magnitude() = x*x + y*y — same computed-getter scenario as the vd::field test, via vd::statics::field.
+    auto model = vd::make_static_model<Point>().with(vd::statics::field(&Point::magnitude, vd::double_bounds::less_than(25.0)));
+    EXPECT_TRUE(model.check(Point { 3.0, 0.0 }));  // magnitude = 9 < 25
+    EXPECT_FALSE(model.check(Point { 3.0, 4.0 })); // magnitude = 25, less_than is exclusive
+}
+
+TEST(StaticModelStaticsFactoryTest, NamedMemberFailureMessageContainsFieldName)
+{
+    auto model =
+        vd::make_static_model<Point>().with(vd::statics::member("x-coordinate", &Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    auto result = model.check(Point { -1.0, 0.0 });
+    ASSERT_EQ(result.failed_rules.size(), 1);
+    EXPECT_NE(result.failed_rules[0].find("x-coordinate"), std::string::npos);
+}
+
+TEST(StaticModelStaticsFactoryTest, UnnamedMemberFailureMessageContainsUnnamed)
+{
+    auto model = vd::make_static_model<Point>().with(vd::statics::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    auto result = model.check(Point { -1.0, 0.0 });
+    ASSERT_EQ(result.failed_rules.size(), 1);
+    EXPECT_NE(result.failed_rules[0].find("Unnamed"), std::string::npos);
+}
+
+TEST(StaticModelStaticsFactoryTest, NamedFieldFailureMessageContainsFieldName)
+{
+    auto model = vd::make_static_model<Point>().with(vd::statics::field("x-getter", &Point::get_x, vd::double_bounds::greater_than(0.0)));
+
+    auto result = model.check(Point { -1.0, 0.0 });
+    ASSERT_EQ(result.failed_rules.size(), 1);
+    EXPECT_NE(result.failed_rules[0].find("x-getter"), std::string::npos);
+}
+
+TEST(StaticModelStaticsFactoryTest, UnnamedFieldFailureMessageContainsUnnamed)
+{
+    auto model = vd::make_static_model<Point>().with(vd::statics::field(&Point::get_x, vd::double_bounds::greater_than(0.0)));
+
+    auto result = model.check(Point { -1.0, 0.0 });
+    ASSERT_EQ(result.failed_rules.size(), 1);
+    EXPECT_NE(result.failed_rules[0].find("Unnamed"), std::string::npos);
+}
+
+TEST(StaticModelStaticsFactoryTest, MultipleStaticsRulesAllMustPass)
+{
+    auto model = vd::make_static_model<Point>()
+                     .with(vd::statics::member("x", &Point::x, vd::double_bounds::inclusive(0.0, 10.0)))
+                     .with(vd::statics::member("y", &Point::y, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_TRUE(model.check(Point { 5.0, 5.0 }));
+    EXPECT_FALSE(model.check(Point { -1.0, 5.0 }));  // only x fails
+    EXPECT_FALSE(model.check(Point { 5.0, -1.0 }));  // only y fails
+
+    auto result = model.check(Point { -1.0, -1.0 }); // both fail
+    EXPECT_FALSE(result.is_valid);
+    EXPECT_EQ(result.failed_rules.size(), 2);
+}
+
+TEST(StaticModelStaticsFactoryTest, StaticsRuleComposesWithFactoryRuleAndRawLambda)
+{
+    // Three different "rule kinds" living in the same tuple side by side:
+    //   - vd::member          -> rule<Point> (std::function, heap-allocating)
+    //   - vd::statics::member -> raw lambda (no rule<T>, no std::function)
+    //   - bare lambda         -> raw lambda, no factory at all
+    auto model = vd::make_static_model<Point>()
+                     .with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)))
+                     .with(vd::statics::member(&Point::y, vd::double_bounds::inclusive(0.0, 10.0)))
+                     .with([](const Point& p) {
+                         return p.x != p.y;
+                     });
+
+    EXPECT_TRUE(model.check(Point { 3.0, 4.0 }));
+    EXPECT_FALSE(model.check(Point { -1.0, 4.0 })); // first rule (vd::member) fails
+    EXPECT_FALSE(model.check(Point { 5.0, -1.0 })); // second rule (vd::statics::member) fails
+    EXPECT_FALSE(model.check(Point { 5.0, 5.0 }));  // third rule (raw lambda) fails
+}
+
+TEST(StaticModelStaticsFactoryTest, ShortCheckStopsAfterFirstStaticsRuleFailureAndKeepsItsMessage)
+{
+    int second_calls = 0;
+
+    auto model = vd::make_static_model<Point>()
+                     .with(vd::statics::member("x", &Point::x, vd::double_bounds::inclusive(0.0, 10.0)))
+                     .with([&second_calls](const Point& p) {
+                         ++second_calls;
+                         return p.y >= 0.0;
+                     });
+
+    auto result = model.short_check(Point { -1.0, -1.0 }); // first rule fails; second would also fail
+    EXPECT_EQ(second_calls, 0);                            // short_check stopped before reaching it
+    EXPECT_FALSE(result.is_valid);
+    ASSERT_FALSE(result.failed_rules.empty());
+    EXPECT_NE(result.failed_rules[0].find("x"), std::string::npos);
+}
+
+TEST(StaticModelStaticsFactoryTest, DieIfFailedThrowsForStaticsRuleFailure)
+{
+    auto model = vd::make_static_model<Point>().with(vd::statics::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+    EXPECT_NO_THROW(model.die_if_failed(Point { 5.0, 0.0 }));
+    EXPECT_THROW(model.die_if_failed(Point { -1.0, 0.0 }), vd::validation_exception);
+}
+
+TEST(StaticModelStaticsFactoryTest, ValidateManyWithStaticsBasedModel)
+{
+    auto model = vd::make_static_model<Point>().with(vd::statics::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_TRUE(vd::validate_many(model, Point { 1.0, 0.0 }, Point { 5.0, 0.0 }, Point { 10.0, 0.0 }));
+    EXPECT_FALSE(vd::validate_many(model, Point { 1.0, 0.0 }, Point { -1.0, 0.0 }));
+}
+
+TEST(StaticModelStaticsFactoryTest, FieldAndMemberStaticsFactoriesMatchRuleVersionsFunctionally)
+{
+    // Both pipelines must agree on validity for every input — only the
+    // allocation strategy differs, never the validation outcome.
+    auto rule_model = vd::make_static_model<Point>()
+                          .with(vd::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)))
+                          .with(vd::field(&Point::get_y, vd::double_bounds::greater_than(0.0)));
+
+    auto raw_model = vd::make_static_model<Point>()
+                         .with(vd::statics::member(&Point::x, vd::double_bounds::inclusive(0.0, 10.0)))
+                         .with(vd::statics::field(&Point::get_y, vd::double_bounds::greater_than(0.0)));
+
+    for(const Point& p : { Point { 5.0, 1.0 }, Point { -1.0, 1.0 }, Point { 5.0, -1.0 }, Point { -1.0, -1.0 } }) {
+        EXPECT_EQ(rule_model.check(p).is_valid, raw_model.check(p).is_valid);
+    }
+}
+
+TEST(StaticModelStaticsFactoryTest, WithExtensionUsingStaticsFactoryPreservesBaseModel)
+{
+    auto base = vd::make_static_model<Point>().with(vd::statics::member("x", &Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+    auto extended = base.with(vd::statics::member("y", &Point::y, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    // base only checks x — a wildly invalid y must still pass it
+    EXPECT_TRUE(base.check(Point { 5.0, -999.0 }));
+    EXPECT_FALSE(base.check(Point { -1.0, 0.0 }));
+
+    // extended checks both
+    EXPECT_FALSE(extended.check(Point { 5.0, -999.0 }));
+    EXPECT_TRUE(extended.check(Point { 5.0, 5.0 }));
+}

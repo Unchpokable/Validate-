@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "assert/vd_assert.hxx"
+
 #include "core/vd_exception.hxx"
 #include "core/vd_result.hxx"
 
