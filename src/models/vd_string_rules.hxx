@@ -241,16 +241,22 @@ constexpr string_match<detail::uri_like> uri_like()
 
 namespace vd::string_rules
 {
+// Tip: these function checks a code units length, which is not the same as user-perceived characters (grapheme clusters). For most use
+// cases this is sufficient, but be aware of this distinction if you are validating strings in languages with complex scripts or emojis.
 constexpr detail::min_length_t min_length(std::size_t min_len)
 {
     return detail::min_length_t(min_len);
 }
 
+// Tip: these function checks a code units length, which is not the same as user-perceived characters (grapheme clusters). For most use
+// cases this is sufficient, but be aware of this distinction if you are validating strings in languages with complex scripts or emojis.
 constexpr detail::max_length_t max_length(std::size_t max_len)
 {
     return detail::max_length_t(max_len);
 }
 
+// Tip: these function checks a code units length, which is not the same as user-perceived characters (grapheme clusters). For most use
+// cases this is sufficient, but be aware of this distinction if you are validating strings in languages with complex scripts or emojis.
 constexpr detail::length_in_between_t length_in_between(std::size_t min_len, std::size_t max_len)
 {
     return detail::length_in_between_t(min_len, max_len);
