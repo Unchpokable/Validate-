@@ -24,7 +24,7 @@ Checks: >-
 
 WarningsAsErrors: ""
 HeaderFilterRegex: "src/.*"
-FormatStyle: file
+
 
 CheckOptions:
   # Naming: everything lower_case (matching the project's vd:: convention)
@@ -48,11 +48,19 @@ CheckOptions:
     value: lower_case
   - key: readability-identifier-naming.EnumConstantCase
     value: lower_case
-  # Member variables use m_ prefix
-  - key: readability-identifier-naming.MemberCase
+  # Member variables use m_ prefix for privates, no prefix for public
+  - key: readability-identifier-naming.MemberPrivateCase
     value: lower_case
-  - key: readability-identifier-naming.MemberPrefix
-    value: m_
+  - key: readability-identifier-naming.MemberPrivatePrefix
+    value: "m_"
+  - key: readability-identifier-naming.MemberPublicCase
+    value: lower_case
+  - key: readability-identifier-naming.MemberPublicPrefix
+    value: ""
+    - key: readability-identifier-naming.MemberProtectedCase
+    value: lower_case
+  - key: readability-identifier-naming.MemberProtectedPrefix
+    value: "m_"
   # Template parameters are CamelCase (T, TValue, TResult, etc.)
   - key: readability-identifier-naming.TemplateParameterCase
     value: CamelCase

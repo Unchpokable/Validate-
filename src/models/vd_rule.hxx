@@ -42,6 +42,26 @@ template<typename C, typename R, typename Arg, typename... Rest>
 struct first_arg_of<R (C::*)(Arg, Rest...) const noexcept> {
     using type = std::remove_cvref_t<Arg>;
 };
+
+template<typename R, typename Arg, typename... Rest>
+struct first_arg_of<R (*)(Arg, Rest...)> {
+    using type = std::remove_cvref_t<Arg>;
+};
+
+template<typename R, typename Arg, typename... Rest>
+struct first_arg_of<R(Arg, Rest...)> {
+    using type = std::remove_cvref_t<Arg>;
+};
+
+template<typename R, typename Arg, typename... Rest>
+struct first_arg_of<R (*)(Arg, Rest...) noexcept> {
+    using type = std::remove_cvref_t<Arg>;
+};
+
+template<typename R, typename Arg, typename... Rest>
+struct first_arg_of<R(Arg, Rest...) noexcept> {
+    using type = std::remove_cvref_t<Arg>;
+};
 } // namespace detail
 
 // Checker concept: any callable V -> bool-convertible.
