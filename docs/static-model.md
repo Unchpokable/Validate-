@@ -1,18 +1,18 @@
 # Static model module
 
-**Заголовок:** `#include <vd.hxx>`
-**Файлы реализации:** `src/models/vd_static_model.hxx`, фабрики `vd::statics::field` / `vd::statics::member` в `src/models/vd_rule_factory.hxx`
+**Header:** `#include <vd.hxx>`
+**Implementation files:** `src/models/vd_static_model.hxx`, factories `vd::statics::field` / `vd::statics::member` in `src/models/vd_rule_factory.hxx`
 **Namespace:** `vd`, `vd::statics`
 
 ---
 
-## Назначение
+## Purpose
 
-`vd::static_model<T, Rules...>` — второй тип модели в библиотеке, наряду с `vd::basic_model<T>` (см. [models.md](models.md)). Идея та же: набор правил + `check()`/`short_check()`. Разница — где живёт этот набор.
+`vd::static_model<T, Rules...>` is the second model type in the library, alongside `vd::basic_model<T>` (see [models.md](models.md)). The idea is the same: a set of rules + `check()`/`short_check()`. The difference is where that set lives.
 
-`basic_model<T>` хранит правила в `std::vector<rule<T>>`: каждое правило — это `rule<T>`, обёртка вокруг `std::function<vd::result(const T&)>`. Это удобно (правила можно добавлять во время выполнения, хранить модели в контейнерах и т.д.), но каждое правило, созданное через `vd::field`/`vd::member`/`vd::predicate`, почти наверняка означает аллокацию под `std::function`.
+`basic_model<T>` stores rules in a `std::vector<rule<T>>`: each rule is a `rule<T>`, a wrapper around `std::function<vd::result(const T&)>`. This is convenient (rules can be added at runtime, models can be stored in containers, etc.), but every rule created via `vd::field`/`vd::member`/`vd::predicate` almost certainly means a heap allocation for the `std::function`.
 
-`static_model<T, Rules...>` хранит правила в `std::tuple<Rules...>` — набор правил является частью **типа** модели, а не её значения. Если тип правила — это захватывающая лямбда или простой функтор без состояния, компилятор может целиком развернуть проверку без единой аллокации на куче. Это тот случай, когда нужен полностью статический, heap-alloc-free конвейер валидации (например, в hot path или в embedded-контексте), а полный набор правил известен на этапе компиляции.
+`static_model<T, Rules...>` stores rules in a `std::tuple<Rules...>` — the set of rules is part of the model's **type**, not its value. If the rule's type is a capturing lambda or a stateless simple functor, the compiler can unroll the check entirely without a single heap allocation. This is the case when you need a fully static, heap-alloc-free validation pipeline (e.g. on a hot path or in an embedded context), and the full set of rules is known at compile time.
 
 ```cpp
 auto model = vd::make_static_model<Point>()
@@ -25,17 +25,17 @@ vd::result r = model.check(point);
 
 ---
 
-## Сравнение с `basic_model<T>`
+## Comparison with `basic_model<T>`
 
-| Аспект | `basic_model<T>` | `static_model<T, Rules...>` |
+| Aspect | `basic_model<T>` | `static_model<T, Rules...>` |
 |---|---|---|
-| Хранилище правил | `std::vector<rule<T>>` (runtime, type-erased через `std::function`) | `std::tuple<Rules...>` (compile-time, каждое правило — отдельный тип) |
-| Набор правил — часть чего | значения (можно менять в рантайме) | **типа** (`.with()` меняет тип модели) |
-| `with()` на lvalue | мутирует объект на месте, возвращает `basic_model&` | мутации на месте нет вообще — только `const&`/`&&` перегрузки, обе возвращают **новый** `static_model<T, Rules..., NewRule>` |
-| `add_rule()` | есть | нет (невозможен в принципе — набор правил фиксирован в типе) |
-| Аллокации на куче | почти всегда (каждое правило — `std::function`) | не обязательны, если использовать `vd::statics::field`/`vd::statics::member`/сырые лямбды |
-| `constexpr` | нет | конструкторы и `with()` — `constexpr`; `check()`/`short_check()` — нет (см. «Ограничения» ниже) |
-| Bound-модель (`.bind()`) | `basic_bound_model<T>` | отсутствует — эквивалента нет |
+| Rule storage | `std::vector<rule<T>>` (runtime, type-erased via `std::function`) | `std::tuple<Rules...>` (compile-time, each rule is a separate type) |
+| The rule set is part of | the value (can be changed at runtime) | the **type** (`.with()` changes the model's type) |
+| `with()` on an lvalue | mutates the object in place, returns `basic_model&` | no in-place mutation at all — only `const&`/`&&` overloads, both returning a **new** `static_model<T, Rules..., NewRule>` |
+| `add_rule()` | present | absent (impossible in principle — the rule set is fixed in the type) |
+| Heap allocations | almost always (every rule is a `std::function`) | not required, if you use `vd::statics::field`/`vd::statics::member`/raw lambdas |
+| `constexpr` | no | constructors and `with()` are `constexpr`; `check()`/`short_check()` are not (see "Limitations" below) |
+| Bound model (`.bind()`) | `basic_bound_model<T>` | absent — no equivalent |
 
 ---
 
@@ -78,25 +78,25 @@ private:
 
 template<typename T>
 requires(!std::is_pointer_v<T> && !std::is_reference_v<T>)
-constexpr auto make_static_model() -> static_model<T>;   // пустая static_model<T>
+constexpr auto make_static_model() -> static_model<T>;   // empty static_model<T>
 ```
 
-### `static_rule_for<Rule, T>` vs `value_checker<Checker, V>` — зачем два похожих концепта
+### `static_rule_for<Rule, T>` vs `value_checker<Checker, V>` — why two similar concepts
 
-Оба концепта структурно идентичны («callable → bool или vd::result»), но описывают разные роли в конвейере:
+Both concepts are structurally identical ("callable → bool or vd::result"), but they describe different roles in the pipeline:
 
-- `value_checker<Checker, V>` (в `vd_rule.hxx`) — проверяет **значение поля**: `V -> bool | vd::result`. Это то, что передаётся вторым аргументом в `vd::field`/`vd::member` (например, `vd::double_bounds::inclusive(...)`, `vd::string_rules::non_empty()`).
-- `static_rule_for<Rule, T>` — проверяет **весь объект**: `const T& -> bool | vd::result`. Это то, что принимает `static_model::with()`.
+- `value_checker<Checker, V>` (in `vd_rule.hxx`) validates a **field's value**: `V -> bool | vd::result`. This is what's passed as the second argument to `vd::field`/`vd::member` (e.g. `vd::double_bounds::inclusive(...)`, `vd::string_rules::non_empty()`).
+- `static_rule_for<Rule, T>` validates the **whole object**: `const T& -> bool | vd::result`. This is what `static_model::with()` accepts.
 
-Разделение оставляет две ответственности типобезопасно различимыми: checker поля не спутать с правилом объекта, даже если структурно оба выглядят как «что-то вызываемое, возвращающее bool». `basic_model` не нуждается в отдельном одноимённом концепте — там роль правила уже закрыта самим типом `rule<T>`.
+The separation keeps the two responsibilities type-safely distinguishable: a field checker can't be confused with an object-level rule, even though both structurally look like "something callable returning a bool". `basic_model` doesn't need a separate concept of the same kind — there, the rule's role is already fixed by the `rule<T>` type itself.
 
-### Пустая модель и `nullptr`
+### Empty model and `nullptr`
 
-Модель без правил (`sizeof...(Rules) == 0`, создаётся через `make_static_model<T>()`) всегда валидна для любого объекта — но не для `nullptr`: `check(nullptr)`/`short_check(nullptr)` возвращают `result(false)` без обращения к правилам, как и у `basic_model`.
+A model with no rules (`sizeof...(Rules) == 0`, created via `make_static_model<T>()`) is always valid for any object — but not for `nullptr`: `check(nullptr)`/`short_check(nullptr)` return `result(false)` without consulting any rules, just like `basic_model`.
 
-### Иммутабельность `with()`
+### `with()` immutability
 
-Каждый вызов `.with(rule)` не модифицирует существующую модель — он **создаёт новую** модель с типом `static_model<T, Rules..., NewRule>`. Исходный объект (если вызван через `const&`) остаётся неизменным и валидным:
+Each call to `.with(rule)` does not modify the existing model — it **creates a new** model of type `static_model<T, Rules..., NewRule>`. The original object (if called via `const&`) remains unchanged and valid:
 
 ```cpp
 auto base = vd::make_static_model<Point>()
@@ -104,20 +104,20 @@ auto base = vd::make_static_model<Point>()
 
 auto extended = base.with(vd::member(&Point::y, vd::double_bounds::inclusive(0.0, 10.0)));
 
-// base проверяет только x, extended — x и y. base не изменился.
+// base checks only x, extended checks x and y. base is unchanged.
 ```
 
-Это прямое следствие того, что набор правил — часть типа: у `basic_model<T>` есть один и тот же тип независимо от количества правил, поэтому мутация на месте возможна и естественна; у `static_model<T, Rules...>` добавление правила меняет сам тип объекта, поэтому «мутация на месте» синтаксически невозможна — вместо неё `with()` всегда возвращает новое значение (нового типа).
+This is a direct consequence of the rule set being part of the type: `basic_model<T>` has the same type regardless of the number of rules, so in-place mutation is possible and natural; for `static_model<T, Rules...>`, adding a rule changes the object's type itself, so "in-place mutation" is syntactically impossible — instead, `with()` always returns a new value (of a new type).
 
 ---
 
-## Построение правил
+## Building rules
 
-`static_model` принимает любой callable, удовлетворяющий `static_rule_for<Rule, T>` — представление правила не фиксировано, в одной модели можно свободно смешивать три стиля.
+`static_model` accepts any callable satisfying `static_rule_for<Rule, T>` — the representation of a rule isn't fixed, and the three styles can be freely mixed within a single model.
 
-### 1. Обычные `vd::rule<T>` (через `vd::field` / `vd::member` / `vd::predicate`)
+### 1. Regular `vd::rule<T>` (via `vd::field` / `vd::member` / `vd::predicate`)
 
-Те же фабрики, что и для `basic_model`, работают и здесь — но каждое такое правило по-прежнему оборачивается в `rule<T>`/`std::function`, то есть аллокация на куче не устраняется:
+The same factories used for `basic_model` work here too — but each such rule is still wrapped in `rule<T>`/`std::function`, so the heap allocation is not eliminated:
 
 ```cpp
 auto model = vd::make_static_model<Point>()
@@ -125,9 +125,9 @@ auto model = vd::make_static_model<Point>()
                  .with(vd::predicate([](const Point& p) { return p.x != p.y; }));
 ```
 
-### 2. `vd::statics::field` / `vd::statics::member` — heap-alloc-free фабрики
+### 2. `vd::statics::field` / `vd::statics::member` — heap-alloc-free factories
 
-Используют ту же внутреннюю реализацию (`detail::field_impl` / `detail::member_impl`), что и `vd::field`/`vd::member`, но возвращают «сырую» лямбду напрямую (через `auto`), не заворачивая её в `rule<T>`:
+These use the same internal implementation (`detail::field_impl` / `detail::member_impl`) as `vd::field`/`vd::member`, but return the "raw" lambda directly (via `auto`) without wrapping it in `rule<T>`:
 
 ```cpp
 auto model = vd::make_static_model<Point>()
@@ -136,42 +136,42 @@ auto model = vd::make_static_model<Point>()
 ```
 
 ```cpp
-// Проверка типов из тестов:
+// Type check from the tests:
 auto rule_obj    = vd::member(&Point::x, checker);
 auto static_rule = vd::statics::member(&Point::x, checker);
 static_assert(std::same_as<decltype(rule_obj), vd::rule<Point>>);
-static_assert(!std::same_as<decltype(static_rule), vd::rule<Point>>);   // без std::function
+static_assert(!std::same_as<decltype(static_rule), vd::rule<Point>>);   // no std::function
 ```
 
-Отдельного `vd::statics::predicate` нет — для правил уровня объекта без готового геттера/поля используйте сырую лямбду напрямую (см. ниже).
+There is no separate `vd::statics::predicate` — for object-level rules without a ready-made getter/field, use a raw lambda directly (see below).
 
-### 3. Сырые callable (лямбды, функторы) без фабрики
+### 3. Raw callables (lambdas, functors) without a factory
 
 ```cpp
 auto model = vd::make_static_model<Point>()
                  .with([](const Point& p) { return p.x > 0 && p.y > 0; });
 ```
 
-Все три стиля можно свободно комбинировать в одной модели — `.with()` требует только, чтобы очередной аргумент удовлетворял `static_rule_for<Rule, T>`.
+All three styles can be freely combined within a single model — `.with()` only requires that the next argument satisfy `static_rule_for<Rule, T>`.
 
 ---
 
 ## `check()` / `short_check()` / `die_if_failed()`
 
-Контракт идентичен `basic_model`, но реализован через fold-выражения по кортежу вместо цикла по вектору:
+The contract is identical to `basic_model`, but implemented via fold expressions over the tuple instead of a loop over the vector:
 
-- `check()` — comma-fold (`(..., invoke_one(rule))`): вызывает **все** правила безусловно, агрегирует все ошибки через `vd::result::with_other()`. Даже если первое правило провалилось, остальные всё равно выполняются (побочные эффекты внутри правил тоже произойдут).
-- `short_check()` — `&&`-fold (`(... && check_one(rule))`): останавливается на первом провалившемся правиле, возвращает только его ошибку.
-- `die_if_failed()` — вызывает `check()`, при провале бросает `vd::validation_exception` через `vd::require<vd::validation_exception>`.
-- Все методы имеют перегрузку по указателю; `nullptr` даёт `result(false)` без вызова правил.
+- `check()` — comma-fold (`(..., invoke_one(rule))`): calls **all** rules unconditionally, aggregating all errors via `vd::result::with_other()`. Even if the first rule fails, the rest still run (side effects inside rules happen too).
+- `short_check()` — `&&`-fold (`(... && check_one(rule))`): stops at the first failing rule, returning only its error.
+- `die_if_failed()` — calls `check()`, throwing `vd::validation_exception` via `vd::require<vd::validation_exception>` on failure.
+- All methods have a pointer overload; `nullptr` yields `result(false)` without invoking any rules.
 
-Поскольку каждое правило в кортеже имеет собственный статический тип, `check()`/`short_check()` определяют через `if constexpr` (по `std::invoke_result_t` конкретного правила), возвращает ли оно `vd::result` или `bool` — эта развилка решается индивидуально для каждого правила во время компиляции, а не унифицированно в рантайме, как у `basic_model` (там всё уже приведено к `rule<T>`, нормализующему возврат к `vd::result` внутри себя).
+Since each rule in the tuple has its own static type, `check()`/`short_check()` determine via `if constexpr` (based on `std::invoke_result_t` for that specific rule) whether it returns `vd::result` or `bool` — this branching is resolved individually per rule at compile time, rather than uniformly at runtime as in `basic_model` (there, everything is already normalized to `rule<T>`, which normalizes the return to `vd::result` internally).
 
 ---
 
-## Композиция моделей
+## Composing models
 
-`static_model` — обычное значение, его можно захватить по значению внутри лямбды и использовать как вложенное правило:
+`static_model` is an ordinary value — it can be captured by value inside a lambda and used as a nested rule:
 
 ```cpp
 auto address_model = vd::make_static_model<Address>()
@@ -188,24 +188,24 @@ auto contact_model = vd::make_static_model<Contact>()
 
 ## `validate_many`
 
-Тот же набор перегрузок, что и для `basic_model` (см. [models.md](models.md#свободные-функции-validate_many)), только принимает `static_model<T, Rules...>`:
+The same set of overloads as for `basic_model` (see [models.md](models.md#free-functions-validate_many)), just accepting `static_model<T, Rules...>`:
 
 ```cpp
-bool ok = vd::validate_many(model, a, b, c);                 // variadic, одинаковый T
+bool ok = vd::validate_many(model, a, b, c);                 // variadic, same T
 bool ok = vd::validate_many(model, std::vector<Point>{...}); // std::vector<T>
 bool ok = vd::validate_many(model, std::vector<Point*>{...});// std::vector<T*> / std::vector<const T*>
 ```
 
 ---
 
-## Ограничения
+## Limitations
 
-- **Нет `static_bound_model`.** У `basic_model` есть `basic_bound_model<T>` (через `.bind()`); у `static_model` эквивалента нет.
-- **Нет `add_rule()`.** Мутация на месте архитектурно невозможна — набор правил зафиксирован в типе.
-- **Нет `vd::statics::predicate`.** Только `field`/`member`; для произвольных предикатов над объектом передавайте лямбду в `.with()` напрямую.
-- **`check()`/`short_check()` не помечены `constexpr`.** Конструкторы и `with()` — да, но фактическое выполнение проверки на этапе компиляции не задействовано (это не протестировано и не гарантируется текущей реализацией).
+- **No `static_bound_model`.** `basic_model` has `basic_bound_model<T>` (via `.bind()`); `static_model` has no equivalent.
+- **No `add_rule()`.** In-place mutation is architecturally impossible — the rule set is fixed in the type.
+- **No `vd::statics::predicate`.** Only `field`/`member`; for arbitrary object-level predicates, pass a lambda directly to `.with()`.
+- **`check()`/`short_check()` are not marked `constexpr`.** The constructors and `with()` are, but actual compile-time execution of the check is not exercised (it's neither tested nor guaranteed by the current implementation).
 
-## Когда использовать что
+## When to use which
 
-- Набор правил известен целиком на этапе компиляции, важна минимизация аллокаций (`std::function`) — берите `static_model` + `vd::statics::field`/`vd::statics::member`.
-- Правила формируются динамически, модель нужно хранить в контейнере разнородных объектов, передавать как значение с единым типом независимо от количества правил, или нужен `.bind()` — используйте `basic_model`.
+- The rule set is known entirely at compile time and minimizing allocations (`std::function`) matters — use `static_model` + `vd::statics::field`/`vd::statics::member`.
+- Rules are formed dynamically, the model needs to be stored in a container of heterogeneous objects, passed as a value with a single type regardless of the rule count, or `.bind()` is needed — use `basic_model`.

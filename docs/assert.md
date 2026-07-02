@@ -1,18 +1,18 @@
 # Assert module
 
-**Заголовок:** `#include <vd.hxx>` (или `#include "assert/vd_assert.hxx"` напрямую)  
+**Header:** `#include <vd.hxx>` (or `#include "assert/vd_assert.hxx"` directly)  
 **Namespace:** `vd`
 
-## Назначение
+## Purpose
 
-Assert module — Набор инструментов для контроля предусловий. Используется как внутри реализации (`vd::require` в `basic_bound_model`), так и в checker-ах (`vd::string_rules::detail::std_regex`). Может использоваться и в коде пользователя.
+The assert module is a set of tools for checking preconditions. It's used both inside the implementation (`vd::require` in `basic_bound_model`) and in checkers (`vd::string_rules::detail::std_regex`). It can also be used in user code.
 
-Ключевое свойство: при провале условия в сообщении об ошибке автоматически указываются **файл, строка и имя функции** — место вызова `require`, а не внутренности библиотеки. Это достигается захватом `std::source_location::current()` в параметре форматной строки через `consteval`-конструктор.
+Key property: on a failed condition, the error message automatically includes the **file, line, and function name** — the call site of `require`, not the library internals. This is achieved by capturing `std::source_location::current()` in the format-string parameter via a `consteval` constructor.
 
 ## API
 
 ### `concept contextually_bool`
-Сервисный концепт для шаблонов `vd::require`, описывающий требование к произвольному объекту типа `T` такое, что произвольный объект типа `T` поддерживает `contextual bool conversion` - то есть может использоваться внутри условий (`if` и тернарный оператор) без явного приведения к `bool` типу при помощи `static_cast<>` или других механизмов.
+A helper concept for `vd::require` templates, describing the requirement that an arbitrary object of type `T` support *contextual bool conversion* — i.e. it can be used inside conditions (`if` and the ternary operator) without an explicit conversion to `bool` via `static_cast<>` or other mechanisms.
 
 ### `vd::require`
 
@@ -21,9 +21,9 @@ template<detail::contextually_bool Cond, typename... Args>
 void vd::require(Cond&& condition, format_string fmt, Args&&... args);
 ```
 
-Параметр condition может являться любым типом, допускающим контекстное приведение к `bool`.
+The `condition` parameter can be any type allowing contextual conversion to `bool`.
 
-Если `condition == false` — форматирует сообщение через `std::format`, выводит в `stderr` и вызывает `std::abort()`.
+If `condition == false` — formats the message via `std::format`, prints it to `stderr`, and calls `std::abort()`.
 
 ```cpp
 vd::require(ptr != nullptr, "Expected non-null pointer in {}", __func__);
@@ -31,9 +31,9 @@ vd::require(value > 0, "Value must be positive, got {}", value);
 vd::require(true, "This never fires");
 ```
 
-Форматная строка — compile-time: тип аргументов проверяется при компиляции через `std::format_string<Args...>`.
+The format string is compile-time: argument types are checked at compile time via `std::format_string<Args...>`.
 
-**Вывод при ошибке:**
+**Output on failure:**
 ```
 Assertion failed: Expected non-null pointer in foo
 File: src/foo.cpp
@@ -48,9 +48,9 @@ template<detail::contextually_bool Cond, typename ExceptionType, typename... Arg
 void vd::require(Cond&& condition, format_string fmt, Args&&... args);
 ```
 
-Если `condition == false` — форматирует сообщение через `std::format` и бросает `ExceptionType`, конструируя его из отформатированной строки (передаётся в конструктор как `std::string`). Это означает, что `what()` исключения будет содержать именно текст сообщения — без строки, файла и функции (в отличие от abort-версии).
+If `condition == false` — formats the message via `std::format` and throws `ExceptionType`, constructing it from the formatted string (passed to the constructor as `std::string`). This means the exception's `what()` will contain exactly the message text — without the file, line, or function (unlike the abort version).
 
-`ExceptionType` обязан наследоваться от `std::exception` и принимать `std::string` в конструктор.
+`ExceptionType` must derive from `std::exception` and accept a `std::string` in its constructor.
 
 ```cpp
 vd::require<std::logic_error>(ptr != nullptr, "Expected non-null pointer in {}", __func__);
@@ -58,12 +58,12 @@ vd::require<vd::validation_exception>(value > 0, "Value must be positive, got {}
 vd::require<std::runtime_error>(true, "This never fires");
 ```
 
-**Вывод при ошибке:**
+**Output on failure:**
 ```
 // exception.what() == "Expected non-null pointer in foo"
 ```
 
-Никакого вывода в `stderr`. Место вызова (`source_location`) захватывается, но в тексте исключения не используется.
+No output to `stderr`. The call site (`source_location`) is captured but not used in the exception text.
 
 ### `vd::require_callback`
 
@@ -73,7 +73,7 @@ template<auto OnFailed, detail::contextually_bool Cond, typename... Args>
 void vd::require_callback(Cond&& condition, format_string fmt, Args&&... args);
 ```
 
-Вместо `abort()` вызывает переданный NTTP-callable с отформатированным сообщением. Полезно для тестирования и для встраивания в систему логирования.
+Instead of `abort()`, calls the given NTTP callable with the formatted message. Useful for testing and for hooking into a logging system.
 
 ```cpp
 void my_logger(std::string msg) { std::cerr << "[ERROR] " << msg << "\n"; }
@@ -81,7 +81,7 @@ void my_logger(std::string msg) { std::cerr << "[ERROR] " << msg << "\n"; }
 vd::require_callback<my_logger>(value > 0, "Bad value: {}", value);
 ```
 
-`OnFailed` — шаблонный не-типовой параметр, поэтому callback разрешается в compile time без накладных расходов на `std::function`. Callback получает `std::string_view` на отформатированное сообщение.
+`OnFailed` is a template non-type parameter, so the callback is resolved at compile time with no `std::function` overhead. The callback receives a `std::string_view` into the formatted message.
 
 ### `vd::ct_require`
 
@@ -91,9 +91,9 @@ template<typename ExceptionType, detail::contextually_bool Cond, typename... Arg
 constexpr void ct_require(Cond&& condition, format_string fmt, Args&&... args);
 ```
 
-Compile-time-совместимый вариант `require<ExceptionType>`: помечен `constexpr`, что позволяет использовать его внутри `constexpr`-конструкторов (например, в конструкторах `vd::string_rules::detail::min_length_t`/`max_length_t`/`length_in_between_t`, см. [string-rules.md](string-rules.md)). При невыполнении условия — как и `require<ExceptionType>` — бросает `ExceptionType`, сконструированный из отформатированной строки.
+A compile-time-compatible variant of `require<ExceptionType>`: marked `constexpr`, which allows it to be used inside `constexpr` constructors (e.g. in the constructors of `vd::string_rules::detail::min_length_t`/`max_length_t`/`length_in_between_t`, see [string-rules.md](string-rules.md)). On a failed condition — just like `require<ExceptionType>` — it throws `ExceptionType`, constructed from the formatted string.
 
-Важно: `constexpr`-пометка **не превращает проверку в compile-time ошибку** — если аргументы (`condition`, форматные параметры) не являются `constexpr`-выражениями (например, обычный runtime `std::size_t`, переданный в конструктор), проверка отрабатывает как обычная runtime-проверка, бросающая исключение. `ct_require` просто не запрещает использовать себя и в тех контекстах, где нужна `constexpr`-совместимость сигнатуры (в отличие от `require`, которая такой совместимостью не обладает).
+Important: the `constexpr` marker does **not turn the check into a compile-time error** — if the arguments (`condition`, format parameters) are not `constexpr` expressions (e.g. an ordinary runtime `std::size_t` passed to the constructor), the check behaves as an ordinary runtime check that throws an exception. `ct_require` simply doesn't prevent itself from being used in contexts that require `constexpr`-compatible signatures (unlike `require`, which doesn't have that compatibility).
 
 ```cpp
 struct max_length_t final {
@@ -108,7 +108,7 @@ struct max_length_t final {
 vd::string_rules::max_length(0);   // throw vd::assertion_exception: "max_len must be positive"
 ```
 
-В отличие от `require<ExceptionType>`, у `ct_require` нет варианта без `ExceptionType` (нет `abort()`-перегрузки) и нет `require_callback`-аналога — только throw-семантика.
+Unlike `require<ExceptionType>`, `ct_require` has no variant without `ExceptionType` (no `abort()` overload) and no `require_callback` counterpart — throw semantics only.
 
 ### `vd::assertion_exception`
 
@@ -117,44 +117,44 @@ vd::string_rules::max_length(0);   // throw vd::assertion_exception: "max_len mu
 using assertion_exception = vd_tagged_exception<struct assertion_exception_tag>;
 ```
 
-Готовый тег-класс исключения (`std::exception`, `what()` возвращает отформатированное сообщение), предназначенный специально для отказов проверки аргументов/предусловий через `vd::ct_require` — как отдельный от `vd::validation_exception` (который семантически привязан к провалу *валидации данных* через `basic_model`/`static_model`). Оба — специализации одного и того же шаблона `vd_tagged_exception<Tag>` с разными тегами, поэтому не смешиваются друг с другом в `catch`-блоках, хотя внутренне устроены идентично.
+A ready-made exception tag class (`std::exception`, `what()` returns the formatted message), intended specifically for argument/precondition check failures via `vd::ct_require` — kept separate from `vd::validation_exception` (which is semantically tied to *data validation* failures through `basic_model`/`static_model`). Both are specializations of the same `vd_tagged_exception<Tag>` template with different tags, so they don't mix with each other in `catch` blocks, even though internally they're structured identically.
 
 ---
 
-## Внутреннее устройство
+## Internals
 
 ### `assert_format<Args...>`
 
-Вспомогательная структура, которая одновременно хранит `std::format_string<Args...>` и `std::source_location`. Конструктор — `consteval`, что позволяет `std::source_location::current()` захватить место вызова `require`, а не место определения самой `assert_format`.
+A helper struct that holds both a `std::format_string<Args...>` and a `std::source_location`. Its constructor is `consteval`, which lets `std::source_location::current()` capture the call site of `require`, rather than the definition site of `assert_format` itself.
 
-Трюк с `std::type_identity_t<Args>...` в сигнатуре `require` нужен для того, чтобы вывод типов `Args` шёл из trailing-аргументов, а не из форматной строки (иначе компилятор не может разрешить два независимых deduction на одни и те же `Args`):
+The `std::type_identity_t<Args>...` trick in `require`'s signature exists so that `Args` deduction comes from the trailing arguments rather than from the format string (otherwise the compiler can't resolve two independent deductions for the same `Args`):
 
 ```cpp
-// Сигнатура require:
+// require's signature:
 void require(Cond&& condition,
              details::assert_format<std::type_identity_t<Args>...> fmt_loc,
              Args&&... args);
-//                    ^^^^^^^^^^^^^^^^ <- Args выводятся отсюда
-//                                                          ^^^^ <- не отсюда
+//                    ^^^^^^^^^^^^^^^^ <- Args is deduced from here
+//                                                          ^^^^ <- not from here
 ```
 
 ### `assert_fail`
 
-`[[noreturn]]` функция, которая форматирует и печатает сообщение в `stderr`, затем вызывает `std::abort()`. Вынесена отдельно, чтобы снизить размер кода при инстанцировании `require` с разными наборами Args.
+A `[[noreturn]]` function that formats and prints the message to `stderr`, then calls `std::abort()`. Factored out separately to reduce code size when `require` is instantiated with different sets of `Args`.
 
-### `Debug` перегрузки
+### Debug overloads
 
-У каждой из функций `require`, `require<>`, `require_callback` существуют Debug-перегрузки `required`, `required<>`, `require_callbackd`, работающие только в сборках без объявленного символа `_NDEBUG` (с подчёркиванием, не `NDEBUG`).
+Each of `require`, `require<>`, `require_callback` has Debug overloads named `required`, `required<>`, `require_callbackd`, which only work in builds without the `_NDEBUG` symbol defined (with an underscore, not `NDEBUG`).
 
 ```cpp
 #ifndef _NDEBUG
-// debug-only реализации
+// debug-only implementations
 void required(Cond&& condition, format_string fmt, Args&&... args);
 template<typename ExceptionType, ...> void required(...);
 template<auto OnFailed, ...> void require_callbackd(...);
 #else
-// пустые no-op заглушки
+// empty no-op stubs
 #endif
 ```
 
-Они не отличаются по механике работы от обычных функций внутри debug-сборок, но удаляются в release. В release-версии `require_callbackd` имеет ограничение `std::invocable<decltype(OnFailed), std::string>` (а не `std::string_view` как в debug) — это известная несогласованность в коде; заглушка всё равно ничего не вызывает.
+They don't differ in mechanics from the regular functions inside debug builds, but are removed in release. In the release version, `require_callbackd` has the constraint `std::invocable<decltype(OnFailed), std::string>` (instead of `std::string_view` as in debug) — this is a known inconsistency in the code; the stub doesn't call anything anyway.

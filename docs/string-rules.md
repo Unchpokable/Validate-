@@ -1,15 +1,15 @@
 # String rules module
 
-**Заголовок:** `#include <vd.hxx>`  
-**Файлы реализации:** `src/models/vd_string_rules.hxx` (шаблонная часть), `src/models/vd_string_rules.cxx` (`regex_checker` и фабрика `regex()`, вынесены отдельно, т.к. не шаблонные и тянут `<regex>`)  
+**Header:** `#include <vd.hxx>`  
+**Implementation files:** `src/models/vd_string_rules.hxx` (template part), `src/models/vd_string_rules.cxx` (`regex_checker` and the `regex()` factory, factored out separately since they're non-template and pull in `<regex>`)  
 **Namespace:** `vd::string_rules`  
-**Зависимость:** CTRE (compile-time regular expressions, `src/inline_deps/ctre.hpp`)
+**Dependency:** CTRE (compile-time regular expressions, `src/inline_deps/ctre.hpp`)
 
 ---
 
-## Назначение
+## Purpose
 
-Модуль предоставляет checker-ы для строковых полей. Все checker-ы принимают `std::string_view` и возвращают `vd::result`, поэтому совместимы с `value_checker` концептом (который требует конвертируемости в `bool`) и работают с `vd::member` / `vd::field` при полях типа `std::string`.
+The module provides checkers for string fields. All checkers accept `std::string_view` and return `vd::result`, so they satisfy the `value_checker` concept (which requires convertibility to `bool`) and work with `vd::member` / `vd::field` for fields of type `std::string`.
 
 ```cpp
 auto model = vd::basic_model<User>()
@@ -20,7 +20,7 @@ auto model = vd::basic_model<User>()
 
 ---
 
-## `string_match<Matcher>` — основной тип checker-а
+## `string_match<Matcher>` — the core checker type
 
 ```cpp
 template<auto Matcher>
@@ -38,13 +38,13 @@ struct string_match {
 };
 ```
 
-Поле `check_description` используется как текст ошибки в `vd::result::failed_rules`, когда правило не срабатывает. Фабричные функции (`empty()`, `non_empty()` и т.д.) передают осмысленное описание автоматически.
+The `check_description` field is used as the error text in `vd::result::failed_rules` when the rule fails. Factory functions (`empty()`, `non_empty()`, etc.) provide a meaningful description automatically.
 
-### Параметр шаблона `Matcher`
+### The `Matcher` template parameter
 
-`Matcher` — **NTTP** (non-type template parameter): compile-time значение, вызываемое как `Matcher(string_view)`. На практике это функция `bool(std::string_view)` из пространства `detail`.
+`Matcher` is an **NTTP** (non-type template parameter): a compile-time value, invocable as `Matcher(string_view)`. In practice it's a `bool(std::string_view)` function from the `detail` namespace.
 
-`string_matcher` концепт:
+The `string_matcher` concept:
 ```cpp
 template<auto Matcher>
 concept string_matcher =
@@ -54,12 +54,12 @@ concept string_matcher =
 
 ### `mode::include` / `mode::exclude`
 
-`mode::exclude` инвертирует результат матчера — позволяет записать «не пустая строка» без отдельной функции (хотя для удобства `non_empty()` существует как отдельная фабрика).
+`mode::exclude` inverts the matcher's result — this lets you write "not an empty string" without a separate function (though `non_empty()` exists as a dedicated factory for convenience).
 
 ```cpp
-// Эквивалентные записи:
+// Equivalent expressions:
 vd::string_rules::non_empty()
-// и вручную:
+// and manually:
 vd::string_rules::string_match<vd::string_rules::detail::empty_string>{
     vd::string_rules::string_match<...>::mode::exclude
 }
@@ -67,21 +67,21 @@ vd::string_rules::string_match<vd::string_rules::detail::empty_string>{
 
 ---
 
-## Обобщение по `CharT`: не только `std::string_view`
+## Generalization over `CharT`: not just `std::string_view`
 
-`string_match<Matcher>` формально по-прежнему шаблонизирован только по NTTP `Matcher` — `CharT` в списке шаблонных параметров структуры нет. Обобщение по типу символа достигается через **перегрузки `operator()`** на одной и той же структуре (`src/models/vd_string_rules.hxx`):
+`string_match<Matcher>` is still formally templated only on the NTTP `Matcher` — there's no `CharT` in the struct's template parameter list. Generalization over the character type is achieved via **`operator()` overloads** on the same struct (`src/models/vd_string_rules.hxx`):
 
 ```cpp
-// 1. std::string_view — фиксированный, всегда доступен:
+// 1. std::string_view — fixed, always available:
 vd::result operator()(std::string_view s) const;
 
-// 2. Любой std::basic_string_view<CharT, Traits> с CharT != char
-//    (wchar_t, char8_t, char16_t, char32_t) — если Matcher умеет его принять:
+// 2. Any std::basic_string_view<CharT, Traits> with CharT != char
+//    (wchar_t, char8_t, char16_t, char32_t) — if Matcher can accept it:
 template<typename CharT, typename Traits>
-requires(!std::same_as<CharT, char>) && /* Matcher invocable c этим view */
+requires(!std::same_as<CharT, char>) && /* Matcher invocable with this view */
 vd::result operator()(std::basic_string_view<CharT, Traits> s) const;
 
-// 3. std::basic_string<CharT, Traits, Alloc> c CharT != char — форвардится в (2):
+// 3. std::basic_string<CharT, Traits, Alloc> with CharT != char — forwards to (2):
 template<typename CharT, typename Traits, typename Alloc>
 requires(!std::same_as<CharT, char>)
 vd::result operator()(const std::basic_string<CharT, Traits, Alloc>& s) const
@@ -90,31 +90,31 @@ vd::result operator()(const std::basic_string<CharT, Traits, Alloc>& s) const
 }
 ```
 
-**Почему три перегрузки, а не один шаблон `template<typename CharT>`:** `char` намеренно вынесен в отдельную нешаблонную перегрузку (1), чтобы она никогда не конкурировала с шаблонной (2) — иначе `std::string_view` совпадал бы сразу с обеими и компилятор не мог бы выбрать лучшую перегрузку однозначно. Перегрузка (3) нужна отдельно, потому что `std::basic_string<CharT>` не выводится в `std::basic_string_view<CharT>` через template argument deduction (нет guide, который бы это сделал автоматически в данном контексте) — поэтому конверсия сделана явно внутри тела функции.
+**Why three overloads instead of a single `template<typename CharT>`:** `char` is intentionally factored into a separate non-template overload (1) so that it never competes with the template one (2) — otherwise `std::string_view` would match both at once and the compiler couldn't unambiguously pick the best overload. Overload (3) is needed separately because `std::basic_string<CharT>` doesn't deduce to `std::basic_string_view<CharT>` via template argument deduction (there's no deduction guide that would do this automatically in this context) — so the conversion is done explicitly inside the function body.
 
-Сам `Matcher` при этом остаётся compile-time NTTP-функцией; какие символьные типы он умеет принимать, зависит только от его собственной сигнатуры (см. ниже).
+`Matcher` itself remains a compile-time NTTP function; which character types it can accept depends only on its own signature (see below).
 
-### Что реально обобщено, а что — нет
+### What's actually generalized and what isn't
 
-| Фабрика | Работает с `wchar_t`/`char8_t`/`char16_t`/`char32_t`? |
+| Factory | Works with `wchar_t`/`char8_t`/`char16_t`/`char32_t`? |
 |---|---|
-| `empty()`, `non_empty()`, `empty_or_whitespace()` | ✅ да — соответствующие `detail`-матчеры сами шаблонны по `CharT` |
-| `min_length()`, `max_length()`, `length_in_between()` | ✅ да — считают `s.size()` напрямую, не парсят содержимое |
-| `email_like()`, `uri_like()` | ❌ нет — матчеры (`detail::email_like`, `detail::uri_like`) это обычные `constexpr bool(std::string_view)` на CTRE, не шаблонные; для них резолвится только перегрузка (1) |
-| `regex()` | ❌ нет — `regex_checker` принимает только `std::string_view`, runtime `std::regex` |
+| `empty()`, `non_empty()`, `empty_or_whitespace()` | ✅ yes — the corresponding `detail` matchers are themselves templated on `CharT` |
+| `min_length()`, `max_length()`, `length_in_between()` | ✅ yes — they count `s.size()` directly, without parsing the content |
+| `email_like()`, `uri_like()` | ❌ no — the matchers (`detail::email_like`, `detail::uri_like`) are ordinary `constexpr bool(std::string_view)` built on CTRE, not templates; only overload (1) resolves for them |
+| `regex()` | ❌ no — `regex_checker` only accepts `std::string_view`, runtime `std::regex` |
 
 ```cpp
 vd::string_rules::empty()(std::wstring_view(L""));           // OK
 vd::string_rules::non_empty()(std::u16string_view(u"hi"));   // OK
 vd::string_rules::non_empty()(std::u32string_view(U"hi"));   // OK
-vd::string_rules::empty()(std::wstring(L""));                // OK, через перегрузку (3)
+vd::string_rules::empty()(std::wstring(L""));                // OK, via overload (3)
 
-// vd::string_rules::email_like()(std::wstring_view(L"a@b.c"));  // не скомпилируется — нет перегрузки, принимающей wstring_view
+// vd::string_rules::email_like()(std::wstring_view(L"a@b.c"));  // does not compile — no overload accepting wstring_view
 ```
 
 ---
 
-## Правила длины строки: `min_length` / `max_length` / `length_in_between`
+## String length rules: `min_length` / `max_length` / `length_in_between`
 
 ```cpp
 constexpr detail::min_length_t         min_length(std::size_t min_len);
@@ -122,7 +122,7 @@ constexpr detail::max_length_t         max_length(std::size_t max_len);
 constexpr detail::length_in_between_t  length_in_between(std::size_t min_len, std::size_t max_len);
 ```
 
-Проверяют **длину строки в code units** — количество элементов `CharT` в `basic_string_view<CharT>`/`basic_string<CharT>`, а не количество grapheme-кластеров (пользовательски воспринимаемых символов). Для `char`-строк это фактически подсчёт байт; для `char16_t` — единиц UTF-16; для `char32_t` — кодовых точек. Для языков со сложными скриптами или эмодзи (комбинируемые последовательности, суррогатные пары и т.д.) это **не** совпадает с «числом символов на экране» — библиотека явно это не скрывает и предупреждает в doc-комментариях исходников.
+They check **string length in code units** — the count of `CharT` elements in `basic_string_view<CharT>`/`basic_string<CharT>`, not the count of grapheme clusters (user-perceived characters). For `char` strings this is effectively a byte count; for `char16_t` — UTF-16 units; for `char32_t` — code points. For languages with complex scripts or emoji (combining sequences, surrogate pairs, etc.) this does **not** match "number of characters on screen" — the library doesn't hide this and warns about it in the source doc comments.
 
 ```cpp
 auto model = vd::basic_model<Profile>()
@@ -131,11 +131,11 @@ auto model = vd::basic_model<Profile>()
     .with(vd::field(&Profile::get_name,  vd::string_rules::length_in_between(3, 10)));
 ```
 
-Работают с тем же набором `CharT`, что и `empty`/`non_empty` — `std::string`, `std::wstring`, `std::u16string`, `std::u32string` и соответствующие `_view`.
+They work with the same set of `CharT` as `empty`/`non_empty` — `std::string`, `std::wstring`, `std::u16string`, `std::u32string` and their `_view` counterparts.
 
-### Валидация параметров конструктора
+### Constructor parameter validation
 
-Конструкторы `min_length_t`/`max_length_t`/`length_in_between_t` — `constexpr`, но проверяют аргументы через `vd::ct_require<vd::assertion_exception>` (см. [assert.md](assert.md#vdct_require)), то есть **бросают исключение во время выполнения**, если параметры некорректны (это runtime-проверка над runtime-аргументами `std::size_t`, а не compile-time ошибка):
+The `min_length_t`/`max_length_t`/`length_in_between_t` constructors are `constexpr`, but validate their arguments via `vd::ct_require<vd::assertion_exception>` (see [assert.md](assert.md#vdct_require)) — meaning they **throw an exception at runtime** if the parameters are invalid (this is a runtime check over runtime `std::size_t` arguments, not a compile-time error):
 
 ```cpp
 vd::string_rules::max_length(0);              // throw vd::assertion_exception: "max_len must be positive"
@@ -146,9 +146,9 @@ vd::string_rules::length_in_between(10, 5);     // throw: "max_len must be great
 
 ---
 
-## Фабричные функции
+## Factory functions
 
-Все функции возвращают checker, совместимый с `value_checker`.
+All functions return a checker compatible with `value_checker`.
 
 ### `empty()`
 
@@ -156,7 +156,7 @@ vd::string_rules::length_in_between(10, 5);     // throw: "max_len must be great
 string_match<detail::empty_string> empty();
 ```
 
-Возвращает `true` только для пустой строки `""`. Whitespace-only строки (`" "`, `"\t"`) **не** считаются пустыми.
+Returns `true` only for an empty string `""`. Whitespace-only strings (`" "`, `"\t"`) are **not** considered empty.
 
 ### `non_empty()`
 
@@ -164,7 +164,7 @@ string_match<detail::empty_string> empty();
 string_match<detail::non_empty_string> non_empty();
 ```
 
-Возвращает `true` для любой непустой строки, включая строки из одних пробелов.
+Returns `true` for any non-empty string, including strings made only of spaces.
 
 ### `empty_or_whitespace()`
 
@@ -172,7 +172,7 @@ string_match<detail::non_empty_string> non_empty();
 string_match<detail::empty_or_whitespace_string> empty_or_whitespace();
 ```
 
-Возвращает `true` если строка пуста или состоит только из символов `' '`, `'\t'`, `'\n'`, `'\r'`, `'\f'`, `'\v'`.
+Returns `true` if the string is empty or consists only of `' '`, `'\t'`, `'\n'`, `'\r'`, `'\f'`, `'\v'` characters.
 
 ### `email_like()`
 
@@ -180,15 +180,15 @@ string_match<detail::empty_or_whitespace_string> empty_or_whitespace();
 string_match<detail::email_like> email_like();
 ```
 
-Минимальная эвристика: паттерн `^\S+@\S+\.\S+$` через CTRE. Проверяет наличие `@`, домена и точки. Полноценная RFC 5322-валидация этой функцией **не предполагается**.
+A minimal heuristic: the pattern `^\S+@\S+\.\S+$` via CTRE. Checks for the presence of `@`, a domain, and a dot. Full RFC 5322 validation is **not** the intent of this function.
 
-Примеры:
+Examples:
 ```
 "user@example.com"    → true
 "a@b.c"               → true
 "notanemail"          → false
 "user@"               → false
-"@domain.com"         → false (нет локальной части — \S+ не совпадёт)
+"@domain.com"         → false (no local part — \S+ won't match)
 ```
 
 ### `uri_like()`
@@ -197,9 +197,9 @@ string_match<detail::email_like> email_like();
 string_match<detail::uri_like> uri_like();
 ```
 
-Минимальная эвристика: паттерн `^\w+://\S+$` через CTRE. Требует наличия схемы и `://`. Полноценная URI-валидация не предполагается.
+A minimal heuristic: the pattern `^\w+://\S+$` via CTRE. Requires a scheme and `://`. Full URI validation is not the intent.
 
-Примеры:
+Examples:
 ```
 "https://example.com"  → true
 "ftp://files.org/path" → true
@@ -209,7 +209,7 @@ string_match<detail::uri_like> uri_like();
 
 ---
 
-## `regex_checker` — runtime-паттерн
+## `regex_checker` — runtime pattern
 
 ```cpp
 struct regex_checker {
@@ -222,28 +222,28 @@ struct regex_checker {
 };
 ```
 
-### Фабричная функция `regex()`
+### The `regex()` factory function
 
 ```cpp
 regex_checker regex(std::string_view pattern);
 ```
 
-Создаёт checker, который проверяет строку через `std::regex_match` (т.е. паттерн должен совпасть со **всей** строкой, а не с подстрокой).
+Creates a checker that validates a string via `std::regex_match` (i.e. the pattern must match the **entire** string, not a substring).
 
 ```cpp
 auto model = vd::basic_model<Form>()
     .with(vd::member(&Form::postal_code, vd::string_rules::regex(R"(\d{5}(-\d{4})?)")));
 ```
 
-### Почему `regex_checker` отдельный тип, а не `string_match<...>`
+### Why `regex_checker` is a separate type instead of `string_match<...>`
 
-`string_match<Matcher>` использует NTTP-параметр `auto Matcher`. В C++20 NTTP может быть функцией (указателем на функцию), структурой с `constexpr`-полями, но **не capturing lambda** и не callable с runtime-состоянием.
+`string_match<Matcher>` uses the NTTP parameter `auto Matcher`. In C++20, an NTTP can be a function (function pointer) or a struct with `constexpr` fields, but **not a capturing lambda** and not a callable with runtime state.
 
-Паттерн `std::regex` — это runtime-данные (строка). Поэтому `regex_checker` хранит паттерн как `std::string` в поле, а не в параметре шаблона. Тип остаётся полноценным `value_checker` через свой `operator()(std::string_view)`.
+An `std::regex` pattern is runtime data (a string). So `regex_checker` stores the pattern as an `std::string` field rather than a template parameter. The type remains a fully-fledged `value_checker` via its own `operator()(std::string_view)`.
 
-### Невалидный паттерн
+### Invalid pattern
 
-При невалидном паттерне `std::regex` бросает `std::regex_error`. Это исключение перехватывается и транслируется в `vd::require(false, ...)` → `std::abort()` с диагностическим сообщением в `stderr`.
+On an invalid pattern, `std::regex` throws `std::regex_error`. This exception is caught and translated into `vd::require(false, ...)` → `std::abort()` with a diagnostic message on `stderr`.
 
 ```cpp
 auto bad = vd::string_rules::regex("[invalid");
@@ -252,32 +252,32 @@ bad("anything");  // -> abort: "Invalid regex pattern: [invalid. Error code: N"
 
 ---
 
-## Использование с `std::string`-полями
+## Usage with `std::string` fields
 
-`string_match::operator()` и `regex_checker::operator()` принимают `std::string_view`. `std::string` неявно конвертируется в `std::string_view`, поэтому поля типа `std::string` работают без дополнительных конвертаций:
+`string_match::operator()` and `regex_checker::operator()` accept `std::string_view`. `std::string` implicitly converts to `std::string_view`, so fields of type `std::string` work without extra conversions:
 
 ```cpp
 struct User { std::string email; };
 
-// std::invoke(&User::email, obj) возвращает const std::string&
-// Checker принимает std::string_view — неявная конверсия
+// std::invoke(&User::email, obj) returns const std::string&
+// The checker accepts std::string_view — implicit conversion
 vd::member(&User::email, vd::string_rules::email_like())
 ```
 
 ---
 
-## Написание собственного string checker-а
+## Writing your own string checker
 
-Любой callable `std::string_view -> bool` (или `-> vd::result`) является валидным `value_checker` для строковых полей:
+Any callable `std::string_view -> bool` (or `-> vd::result`) is a valid `value_checker` for string fields:
 
 ```cpp
-// Через лямбду (возврат bool)
+// Via a lambda (returning bool)
 auto starts_with_http = [](std::string_view s) {
     return s.starts_with("http");
 };
 vd::member(&Config::base_url, starts_with_http)
 
-// Через структуру с детализированной ошибкой (возврат vd::result)
+// Via a struct with a detailed error (returning vd::result)
 struct min_length {
     std::size_t n;
     vd::result operator()(std::string_view s) const {
@@ -288,22 +288,22 @@ struct min_length {
 vd::member(&Post::body, min_length{10})
 ```
 
-Для использования с `string_match<Matcher>` (с поддержкой `mode::include/exclude`) необходима функция `bool(std::string_view)` без состояния (чтобы быть NTTP):
+To use it with `string_match<Matcher>` (with `mode::include/exclude` support), you need a stateless `bool(std::string_view)` function (so it can be an NTTP):
 
 ```cpp
 namespace my_matchers {
     bool starts_with_http(std::string_view s) { return s.starts_with("http"); }
 }
 
-// string_match с exclude-режимом:
+// string_match with exclude mode:
 vd::string_rules::string_match<my_matchers::starts_with_http>{
     vd::string_rules::string_match<my_matchers::starts_with_http>::mode::exclude
 }
-// Проверяет: НЕ начинается с "http"
+// Checks: does NOT start with "http"
 ```
 
 ---
 
-## Зависимость CTRE
+## CTRE dependency
 
-`email_like()` и `uri_like()` используют CTRE для compile-time regexp-компиляции. CTRE — header-only библиотека, расположена в `src/inline_deps/ctre.hpp`. Остальные функции модуля CTRE не требуют.
+`email_like()` and `uri_like()` use CTRE for compile-time regex compilation. CTRE is a header-only library, located at `src/inline_deps/ctre.hpp`. The rest of the module's functions don't require CTRE.

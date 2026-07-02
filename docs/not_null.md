@@ -1,30 +1,30 @@
 # not_null module
 
-**Заголовок:** `#include <vd.hxx>` (транзитивно через `vd_models.hxx`)  
-**Файл реализации:** `src/core/vd_not_null.hxx`  
+**Header:** `#include <vd.hxx>` (transitively via `vd_models.hxx`)  
+**Implementation file:** `src/core/vd_not_null.hxx`  
 **Namespace:** `vd`
 
 ---
 
-## Назначение
+## Purpose
 
-`vd::not_null<T*>` — обёртка над сырым указателем, которая выражает предусловие «указатель никогда не равен `nullptr`» непосредственно в сигнатуре функции. Принцип: если правило нарушено, ошибка фиксируется в момент передачи аргумента, а не где-то внутри функции.
+`vd::not_null<T*>` is a wrapper around a raw pointer that expresses the precondition "the pointer is never `nullptr`" directly in the function signature. The principle: if the rule is violated, the error is caught at the point the argument is passed, not somewhere inside the function.
 
 ```cpp
-// Без not_null — нарушение обнаружится (в лучшем случае) при разыменовании внутри
+// Without not_null — the violation is caught (at best) at dereference time inside
 void process(Widget* w) {
-    w->do_something();  // UB если w == nullptr
+    w->do_something();  // UB if w == nullptr
 }
 
-// С not_null — нарушение обнаруживается на вызывающей стороне
+// With not_null — the violation is caught at the call site
 void process(vd::not_null<Widget*> w) {
-    w->do_something();  // гарантированно безопасно
+    w->do_something();  // guaranteed safe
 }
 ```
 
 ---
 
-## Определение
+## Definition
 
 ```cpp
 template<typename T>
@@ -39,37 +39,37 @@ struct not_null final {
 };
 ```
 
-Принимает только типы-указатели (`T*`, `const T*`). `not_null<int>` не компилируется.
+Only accepts pointer types (`T*`, `const T*`). `not_null<int>` does not compile.
 
 ---
 
-## Конструирование
+## Construction
 
-### Из nullptr — запрещено
+### From nullptr — forbidden
 
 ```cpp
 constexpr not_null(std::nullptr_t) = delete;
 ```
 
-Передача `nullptr` напрямую не компилируется:
+Passing `nullptr` directly does not compile:
 
 ```cpp
-vd::not_null<int*> p = nullptr;  // ошибка компиляции
+vd::not_null<int*> p = nullptr;  // compile error
 ```
 
-### Из ненулевого указателя
+### From a non-null pointer
 
 ```cpp
 constexpr not_null(pointer_type ptr);
 ```
 
-В `constexpr`-контексте проверяет `ptr != nullptr` статически — нарушение является ошибкой компиляции. В runtime-контексте при `ptr == nullptr` вызывается `std::terminate()` с диагностическим сообщением в `stderr`:
+In a `constexpr` context, checks `ptr != nullptr` statically — a violation is a compile error. In a runtime context, `ptr == nullptr` calls `std::terminate()` with a diagnostic message on `stderr`:
 
 ```
 not_null cannot be constructed with nullptr
 ```
 
-### Ковариантное копирование
+### Covariant copying
 
 ```cpp
 template<typename U>
@@ -77,36 +77,36 @@ requires std::is_convertible_v<U, T>
 constexpr not_null(const not_null<U>& other) noexcept;
 ```
 
-Позволяет неявно приводить `not_null<Derived*>` к `not_null<Base*>`.
+Allows implicitly converting `not_null<Derived*>` to `not_null<Base*>`.
 
 ---
 
-## Операторы
+## Operators
 
 ```cpp
-constexpr reference_type operator*()  const noexcept;  // разыменование
-constexpr pointer_type   operator->() const noexcept;  // доступ к члену
-constexpr operator pointer_type()     const noexcept;  // неявное приведение к T*
+constexpr reference_type operator*()  const noexcept;  // dereference
+constexpr pointer_type   operator->() const noexcept;  // member access
+constexpr operator pointer_type()     const noexcept;  // implicit conversion to T*
 
-constexpr pointer_type get() const noexcept;           // явное получение указателя
+constexpr pointer_type get() const noexcept;           // explicit pointer retrieval
 
 friend constexpr auto operator<=>(not_null, not_null) = default;
 friend constexpr bool operator==(not_null, not_null)  = default;
 ```
 
-`not_null<T*>` прозрачно конвертируется в `T*`, поэтому его можно передавать в функции, ожидающие сырой указатель, без явного вызова `get()`.
+`not_null<T*>` transparently converts to `T*`, so it can be passed to functions expecting a raw pointer without an explicit `get()` call.
 
 ---
 
-## Владение
+## Ownership
 
-`not_null<T*>` **не владеет** объектом. Это ненулевой наблюдатель, аналогичный сырому указателю по семантике владения. Для передачи владения используйте `std::unique_ptr` или `std::shared_ptr`; `not_null` применяется, когда указатель заимствован у вызывающего кода.
+`not_null<T*>` **does not own** the object. It's a non-null observer, analogous to a raw pointer in ownership semantics. For transferring ownership, use `std::unique_ptr` or `std::shared_ptr`; `not_null` is meant for pointers borrowed from the calling code.
 
 ---
 
-## Типичные паттерны
+## Typical patterns
 
-### Параметр функции
+### Function parameter
 
 ```cpp
 void render(vd::not_null<Renderer*> r, vd::not_null<const Scene*> scene) {
@@ -114,7 +114,7 @@ void render(vd::not_null<Renderer*> r, vd::not_null<const Scene*> scene) {
 }
 ```
 
-### Поле класса
+### Class field
 
 ```cpp
 class View {
@@ -124,29 +124,29 @@ public:
 };
 ```
 
-### Совместимость с basic_model
+### Compatibility with basic_model
 
-Внутри библиотеки `not_null` используется в `basic_model::bind()` и `basic_bound_model::bind()` — эти методы принимают `not_null<const T*>`, явно документируя, что `nullptr` не является допустимым аргументом:
+Inside the library, `not_null` is used in `basic_model::bind()` and `basic_bound_model::bind()` — these methods accept `not_null<const T*>`, explicitly documenting that `nullptr` is not a valid argument:
 
 ```cpp
 auto bound = model.bind(vd::not_null<const Point*>(&point));
 ```
 
-При передаче сырого ненулевого указателя компилятор строит `not_null` неявно.
+When a raw non-null pointer is passed, the compiler builds `not_null` implicitly.
 
 ---
 
-## Отличие от `vd::memory::not_null`
+## Difference from `vd::memory::not_null`
 
-Не путать с одноимённым, но совсем другим по роли `vd::memory::not_null` (`src/models/vd_memory.hxx`, `Namespace: vd::memory`). Это не тип-обёртка, а **готовый checker** — значение, вызываемое как `value_checker`, предназначенное для использования внутри `vd::member`/`vd::field`:
+Not to be confused with the identically-named but very different `vd::memory::not_null` (`src/models/vd_memory.hxx`, `Namespace: vd::memory`). This is not a wrapper type, but a **ready-made checker** — a value invocable as a `value_checker`, intended for use inside `vd::member`/`vd::field`:
 
 ```cpp
 inline constexpr detail::not_null_t not_null;   // vd::memory::not_null
 
-vd::result operator()(const T& ptr) const;      // T должен быть pointer-like (raw pointer, shared_ptr, unique_ptr, QPointer, …)
+vd::result operator()(const T& ptr) const;      // T must be pointer-like (raw pointer, shared_ptr, unique_ptr, QPointer, …)
 ```
 
-`vd::memory::not_null` проверяет поле объекта модели на `!= nullptr` и возвращает `vd::result` (без abort/terminate — просто провал правила с сообщением `"Pointer must not be null"`), тогда как `vd::not_null<T*>` (описан выше в этом документе) — тип параметра функции/поля класса, гарантирующий ненулевость на уровне контракта (terminate/ошибка компиляции при построении). Пример использования `vd::memory::not_null` внутри модели:
+`vd::memory::not_null` checks a model object's field for `!= nullptr` and returns `vd::result` (no abort/terminate — just a rule failure with the message `"Pointer must not be null"`), whereas `vd::not_null<T*>` (described earlier in this document) is a function-parameter/class-field type that guarantees non-nullness at the contract level (terminate/compile error on construction). Example of using `vd::memory::not_null` inside a model:
 
 ```cpp
 struct Node {
@@ -159,16 +159,16 @@ auto model = vd::basic_model<Node>()
     .with(vd::member(&Node::data,   vd::memory::not_null));
 ```
 
-`pointer_like<T>` — концепт, требующий только `{ ptr == nullptr } -> convertible_to<bool>`; типы, не удовлетворяющие ему, дают `static_assert` с понятным сообщением вместо неясной ошибки шаблона.
+`pointer_like<T>` is a concept requiring only `{ ptr == nullptr } -> convertible_to<bool>`; types that don't satisfy it produce a `static_assert` with a clear message instead of an obscure template error.
 
 ---
 
-## Сравнение с gsl::not_null
+## Comparison with gsl::not_null
 
-`vd::not_null<T>` намеренно минималистичен. В отличие от `gsl::not_null`:
+`vd::not_null<T>` is intentionally minimal. Unlike `gsl::not_null`:
 
-- нет поддержки умных указателей (`unique_ptr`, `shared_ptr`)
-- нет `[[gsl::Owner]]` / `[[gsl::Pointer]]` аннотаций
-- нет зависимости от GSL
+- no smart pointer support (`unique_ptr`, `shared_ptr`)
+- no `[[gsl::Owner]]` / `[[gsl::Pointer]]` annotations
+- no dependency on GSL
 
-Библиотека ориентирована на сценарии передачи заимствованных сырых указателей в контексте валидации.
+The library is aimed at scenarios of passing borrowed raw pointers in a validation context.
