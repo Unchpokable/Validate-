@@ -331,7 +331,7 @@ namespace my_rules {
 
 ## Further reading
 
-The [`docs/`](docs/) directory covers the internals — design rationale, TMP/concept choices, and module-by-module reference (in Russian): [overview](docs/overview.md), [models](docs/models.md), [static-model](docs/static-model.md), [numeric](docs/numeric.md), [string-rules](docs/string-rules.md), [assert](docs/assert.md), [not_null](docs/not_null.md), [qt extensions](docs/qt%20extensions.md), [extending](docs/extending.md).
+The [`docs/`](docs/) directory covers the internals — design rationale, TMP/concept choices, and module-by-module reference: [overview](docs/overview.md), [models](docs/models.md), [static-model](docs/static-model.md), [numeric](docs/numeric.md), [string-rules](docs/string-rules.md), [assert](docs/assert.md), [not_null](docs/not_null.md), [qt extensions](docs/qt%20extensions.md), [extending](docs/extending.md).
 
 ## License
 
