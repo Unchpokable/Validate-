@@ -136,6 +136,33 @@ auto bound = model.bind(vd::not_null<const Point*>(&point));
 
 ---
 
+## Отличие от `vd::memory::not_null`
+
+Не путать с одноимённым, но совсем другим по роли `vd::memory::not_null` (`src/models/vd_memory.hxx`, `Namespace: vd::memory`). Это не тип-обёртка, а **готовый checker** — значение, вызываемое как `value_checker`, предназначенное для использования внутри `vd::member`/`vd::field`:
+
+```cpp
+inline constexpr detail::not_null_t not_null;   // vd::memory::not_null
+
+vd::result operator()(const T& ptr) const;      // T должен быть pointer-like (raw pointer, shared_ptr, unique_ptr, QPointer, …)
+```
+
+`vd::memory::not_null` проверяет поле объекта модели на `!= nullptr` и возвращает `vd::result` (без abort/terminate — просто провал правила с сообщением `"Pointer must not be null"`), тогда как `vd::not_null<T*>` (описан выше в этом документе) — тип параметра функции/поля класса, гарантирующий ненулевость на уровне контракта (terminate/ошибка компиляции при построении). Пример использования `vd::memory::not_null` внутри модели:
+
+```cpp
+struct Node {
+    Node* parent;
+    std::shared_ptr<Data> data;
+};
+
+auto model = vd::basic_model<Node>()
+    .with(vd::member(&Node::parent, vd::memory::not_null))
+    .with(vd::member(&Node::data,   vd::memory::not_null));
+```
+
+`pointer_like<T>` — концепт, требующий только `{ ptr == nullptr } -> convertible_to<bool>`; типы, не удовлетворяющие ему, дают `static_assert` с понятным сообщением вместо неясной ошибки шаблона.
+
+---
+
 ## Сравнение с gsl::not_null
 
 `vd::not_null<T>` намеренно минималистичен. В отличие от `gsl::not_null`:

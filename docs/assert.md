@@ -83,6 +83,44 @@ vd::require_callback<my_logger>(value > 0, "Bad value: {}", value);
 
 `OnFailed` — шаблонный не-типовой параметр, поэтому callback разрешается в compile time без накладных расходов на `std::function`. Callback получает `std::string_view` на отформатированное сообщение.
 
+### `vd::ct_require`
+
+```cpp
+template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
+    requires std::derived_from<ExceptionType, std::exception>
+constexpr void ct_require(Cond&& condition, format_string fmt, Args&&... args);
+```
+
+Compile-time-совместимый вариант `require<ExceptionType>`: помечен `constexpr`, что позволяет использовать его внутри `constexpr`-конструкторов (например, в конструкторах `vd::string_rules::detail::min_length_t`/`max_length_t`/`length_in_between_t`, см. [string-rules.md](string-rules.md)). При невыполнении условия — как и `require<ExceptionType>` — бросает `ExceptionType`, сконструированный из отформатированной строки.
+
+Важно: `constexpr`-пометка **не превращает проверку в compile-time ошибку** — если аргументы (`condition`, форматные параметры) не являются `constexpr`-выражениями (например, обычный runtime `std::size_t`, переданный в конструктор), проверка отрабатывает как обычная runtime-проверка, бросающая исключение. `ct_require` просто не запрещает использовать себя и в тех контекстах, где нужна `constexpr`-совместимость сигнатуры (в отличие от `require`, которая такой совместимостью не обладает).
+
+```cpp
+struct max_length_t final {
+    std::size_t max_len;
+    constexpr max_length_t(std::size_t max_len) : max_len(max_len)
+    {
+        vd::ct_require<vd::assertion_exception>(max_len > 0, "max_len must be positive");
+    }
+    // ...
+};
+
+vd::string_rules::max_length(0);   // throw vd::assertion_exception: "max_len must be positive"
+```
+
+В отличие от `require<ExceptionType>`, у `ct_require` нет варианта без `ExceptionType` (нет `abort()`-перегрузки) и нет `require_callback`-аналога — только throw-семантика.
+
+### `vd::assertion_exception`
+
+```cpp
+// src/core/vd_exception.hxx
+using assertion_exception = vd_tagged_exception<struct assertion_exception_tag>;
+```
+
+Готовый тег-класс исключения (`std::exception`, `what()` возвращает отформатированное сообщение), предназначенный специально для отказов проверки аргументов/предусловий через `vd::ct_require` — как отдельный от `vd::validation_exception` (который семантически привязан к провалу *валидации данных* через `basic_model`/`static_model`). Оба — специализации одного и того же шаблона `vd_tagged_exception<Tag>` с разными тегами, поэтому не смешиваются друг с другом в `catch`-блоках, хотя внутренне устроены идентично.
+
+---
+
 ## Внутреннее устройство
 
 ### `assert_format<Args...>`

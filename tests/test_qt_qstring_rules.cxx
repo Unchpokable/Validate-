@@ -272,6 +272,103 @@ TEST(QStringRulesRegexDeathTest, InvalidPatternAborts)
 }
 
 // ---------------------------------------------------------------------------
+// string_rules::max_length
+// Passes when QStringView::size() (UTF-16 code units) is <= max_len.
+// ---------------------------------------------------------------------------
+
+TEST(QStringRulesMaxLengthTest, AcceptsShorterOrEqualLength)
+{
+    auto checker = vd::qt::string_rules::max_length(5);
+    EXPECT_TRUE(checker(QString("")));
+    EXPECT_TRUE(checker(QString("abc")));
+    EXPECT_TRUE(checker(QString("abcde")));
+}
+
+TEST(QStringRulesMaxLengthTest, RejectsLongerLength)
+{
+    auto checker = vd::qt::string_rules::max_length(5);
+    EXPECT_FALSE(checker(QString("abcdef")));
+    EXPECT_FALSE(checker(QString("a very long string")));
+}
+
+TEST(QStringRulesMaxLengthTest, WorksWithQStringView)
+{
+    auto checker = vd::qt::string_rules::max_length(5);
+    QString data = "abcdef";
+    EXPECT_FALSE(checker(QStringView(data)));
+}
+
+TEST(QStringRulesMaxLengthDeathTest, ZeroMaxLenAborts)
+{
+    EXPECT_THROW(vd::qt::string_rules::max_length(0), vd::assertion_exception);
+}
+
+// ---------------------------------------------------------------------------
+// string_rules::min_length
+// Passes when QStringView::size() (UTF-16 code units) is >= min_len.
+// ---------------------------------------------------------------------------
+
+TEST(QStringRulesMinLengthTest, AcceptsLongerOrEqualLength)
+{
+    auto checker = vd::qt::string_rules::min_length(3);
+    EXPECT_TRUE(checker(QString("abc")));
+    EXPECT_TRUE(checker(QString("abcdef")));
+}
+
+TEST(QStringRulesMinLengthTest, RejectsShorterLength)
+{
+    auto checker = vd::qt::string_rules::min_length(3);
+    EXPECT_FALSE(checker(QString("ab")));
+    EXPECT_FALSE(checker(QString("")));
+}
+
+TEST(QStringRulesMinLengthTest, WorksWithQStringView)
+{
+    auto checker = vd::qt::string_rules::min_length(3);
+    QString data = "ab";
+    EXPECT_FALSE(checker(QStringView(data)));
+}
+
+TEST(QStringRulesMinLengthDeathTest, ZeroMinLenAborts)
+{
+    EXPECT_THROW(vd::qt::string_rules::min_length(0), vd::assertion_exception);
+}
+
+// ---------------------------------------------------------------------------
+// string_rules::length_in_between
+// Passes when QStringView::size() is within [min_len, max_len].
+// ---------------------------------------------------------------------------
+
+TEST(QStringRulesLengthInBetweenTest, AcceptsLengthWithinRange)
+{
+    auto checker = vd::qt::string_rules::length_in_between(3, 6);
+    EXPECT_TRUE(checker(QString("abc")));
+    EXPECT_TRUE(checker(QString("abcd")));
+    EXPECT_TRUE(checker(QString("abcdef")));
+}
+
+TEST(QStringRulesLengthInBetweenTest, RejectsLengthOutsideRange)
+{
+    auto checker = vd::qt::string_rules::length_in_between(3, 6);
+    EXPECT_FALSE(checker(QString("ab")));
+    EXPECT_FALSE(checker(QString("abcdefg")));
+}
+
+TEST(QStringRulesLengthInBetweenTest, WorksWithQStringView)
+{
+    auto checker = vd::qt::string_rules::length_in_between(3, 6);
+    QString data = "ab";
+    EXPECT_FALSE(checker(QStringView(data)));
+}
+
+TEST(QStringRulesLengthInBetweenDeathTest, InvalidRangeAborts)
+{
+    EXPECT_THROW(vd::qt::string_rules::length_in_between(0, 5), vd::assertion_exception);
+    EXPECT_THROW(vd::qt::string_rules::length_in_between(5, 0), vd::assertion_exception);
+    EXPECT_THROW(vd::qt::string_rules::length_in_between(10, 5), vd::assertion_exception);
+}
+
+// ---------------------------------------------------------------------------
 // Integration: vd::member with Qt string rules on a plain QString struct.
 // qstring_match::operator() takes QStringView; const QString& implicitly
 // converts, so value_checker<qstring_match<...>, QString> is satisfied.

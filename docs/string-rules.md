@@ -1,7 +1,7 @@
 # String rules module
 
 **Заголовок:** `#include <vd.hxx>`  
-**Файл реализации:** `src/models/vd_string_rules.hxx`  
+**Файлы реализации:** `src/models/vd_string_rules.hxx` (шаблонная часть), `src/models/vd_string_rules.cxx` (`regex_checker` и фабрика `regex()`, вынесены отдельно, т.к. не шаблонные и тянут `<regex>`)  
 **Namespace:** `vd::string_rules`  
 **Зависимость:** CTRE (compile-time regular expressions, `src/inline_deps/ctre.hpp`)
 
@@ -63,6 +63,85 @@ vd::string_rules::non_empty()
 vd::string_rules::string_match<vd::string_rules::detail::empty_string>{
     vd::string_rules::string_match<...>::mode::exclude
 }
+```
+
+---
+
+## Обобщение по `CharT`: не только `std::string_view`
+
+`string_match<Matcher>` формально по-прежнему шаблонизирован только по NTTP `Matcher` — `CharT` в списке шаблонных параметров структуры нет. Обобщение по типу символа достигается через **перегрузки `operator()`** на одной и той же структуре (`src/models/vd_string_rules.hxx`):
+
+```cpp
+// 1. std::string_view — фиксированный, всегда доступен:
+vd::result operator()(std::string_view s) const;
+
+// 2. Любой std::basic_string_view<CharT, Traits> с CharT != char
+//    (wchar_t, char8_t, char16_t, char32_t) — если Matcher умеет его принять:
+template<typename CharT, typename Traits>
+requires(!std::same_as<CharT, char>) && /* Matcher invocable c этим view */
+vd::result operator()(std::basic_string_view<CharT, Traits> s) const;
+
+// 3. std::basic_string<CharT, Traits, Alloc> c CharT != char — форвардится в (2):
+template<typename CharT, typename Traits, typename Alloc>
+requires(!std::same_as<CharT, char>)
+vd::result operator()(const std::basic_string<CharT, Traits, Alloc>& s) const
+{
+    return (*this)(std::basic_string_view<CharT, Traits>(s));
+}
+```
+
+**Почему три перегрузки, а не один шаблон `template<typename CharT>`:** `char` намеренно вынесен в отдельную нешаблонную перегрузку (1), чтобы она никогда не конкурировала с шаблонной (2) — иначе `std::string_view` совпадал бы сразу с обеими и компилятор не мог бы выбрать лучшую перегрузку однозначно. Перегрузка (3) нужна отдельно, потому что `std::basic_string<CharT>` не выводится в `std::basic_string_view<CharT>` через template argument deduction (нет guide, который бы это сделал автоматически в данном контексте) — поэтому конверсия сделана явно внутри тела функции.
+
+Сам `Matcher` при этом остаётся compile-time NTTP-функцией; какие символьные типы он умеет принимать, зависит только от его собственной сигнатуры (см. ниже).
+
+### Что реально обобщено, а что — нет
+
+| Фабрика | Работает с `wchar_t`/`char8_t`/`char16_t`/`char32_t`? |
+|---|---|
+| `empty()`, `non_empty()`, `empty_or_whitespace()` | ✅ да — соответствующие `detail`-матчеры сами шаблонны по `CharT` |
+| `min_length()`, `max_length()`, `length_in_between()` | ✅ да — считают `s.size()` напрямую, не парсят содержимое |
+| `email_like()`, `uri_like()` | ❌ нет — матчеры (`detail::email_like`, `detail::uri_like`) это обычные `constexpr bool(std::string_view)` на CTRE, не шаблонные; для них резолвится только перегрузка (1) |
+| `regex()` | ❌ нет — `regex_checker` принимает только `std::string_view`, runtime `std::regex` |
+
+```cpp
+vd::string_rules::empty()(std::wstring_view(L""));           // OK
+vd::string_rules::non_empty()(std::u16string_view(u"hi"));   // OK
+vd::string_rules::non_empty()(std::u32string_view(U"hi"));   // OK
+vd::string_rules::empty()(std::wstring(L""));                // OK, через перегрузку (3)
+
+// vd::string_rules::email_like()(std::wstring_view(L"a@b.c"));  // не скомпилируется — нет перегрузки, принимающей wstring_view
+```
+
+---
+
+## Правила длины строки: `min_length` / `max_length` / `length_in_between`
+
+```cpp
+constexpr detail::min_length_t         min_length(std::size_t min_len);
+constexpr detail::max_length_t         max_length(std::size_t max_len);
+constexpr detail::length_in_between_t  length_in_between(std::size_t min_len, std::size_t max_len);
+```
+
+Проверяют **длину строки в code units** — количество элементов `CharT` в `basic_string_view<CharT>`/`basic_string<CharT>`, а не количество grapheme-кластеров (пользовательски воспринимаемых символов). Для `char`-строк это фактически подсчёт байт; для `char16_t` — единиц UTF-16; для `char32_t` — кодовых точек. Для языков со сложными скриптами или эмодзи (комбинируемые последовательности, суррогатные пары и т.д.) это **не** совпадает с «числом символов на экране» — библиотека явно это не скрывает и предупреждает в doc-комментариях исходников.
+
+```cpp
+auto model = vd::basic_model<Profile>()
+    .with(vd::field(&Profile::get_email, vd::string_rules::max_length(20)))
+    .with(vd::member(&Profile::website,  vd::string_rules::min_length(5)))
+    .with(vd::field(&Profile::get_name,  vd::string_rules::length_in_between(3, 10)));
+```
+
+Работают с тем же набором `CharT`, что и `empty`/`non_empty` — `std::string`, `std::wstring`, `std::u16string`, `std::u32string` и соответствующие `_view`.
+
+### Валидация параметров конструктора
+
+Конструкторы `min_length_t`/`max_length_t`/`length_in_between_t` — `constexpr`, но проверяют аргументы через `vd::ct_require<vd::assertion_exception>` (см. [assert.md](assert.md#vdct_require)), то есть **бросают исключение во время выполнения**, если параметры некорректны (это runtime-проверка над runtime-аргументами `std::size_t`, а не compile-time ошибка):
+
+```cpp
+vd::string_rules::max_length(0);              // throw vd::assertion_exception: "max_len must be positive"
+vd::string_rules::min_length(0);               // throw vd::assertion_exception: "min_len must be positive"
+vd::string_rules::length_in_between(0, 5);      // throw: "min_len must be positive"
+vd::string_rules::length_in_between(10, 5);     // throw: "max_len must be greater than or equal to min_len"
 ```
 
 ---

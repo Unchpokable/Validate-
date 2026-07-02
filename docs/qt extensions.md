@@ -147,6 +147,48 @@ qstring_match<detail::uri_like> uri_like();
 
 ---
 
+## Правила длины: `min_length` / `max_length` / `length_in_between`
+
+Зеркало std-версии из [string-rules.md](string-rules.md#правила-длины-строки-min_length--max_length--length_in_between), но без CharT-обобщения — `QString` внутри всегда UTF-16, отдельный шаблон по символьному типу не нужен:
+
+```cpp
+constexpr detail::min_length_t         min_length(std::size_t min_len);
+constexpr detail::max_length_t         max_length(std::size_t max_len);
+constexpr detail::length_in_between_t  length_in_between(std::size_t min_len, std::size_t max_len);
+```
+
+Каждый checker вызывает `QStringView::size()` и сравнивает с границами:
+
+```cpp
+struct max_length_t final {
+    std::size_t max_len;
+    constexpr max_length_t(std::size_t max_len);   // throws vd::assertion_exception если max_len == 0
+
+    vd::result operator()(QStringView s) const;    // ошибка, если s.size() > max_len
+};
+```
+
+```cpp
+auto model = vd::basic_model<Profile>()
+    .with(vd::member(&Profile::username, vd::qt::string_rules::min_length(3)))
+    .with(vd::member(&Profile::bio,      vd::qt::string_rules::max_length(280)));
+```
+
+### Единица измерения: UTF-16 code units, не байты и не graphemes
+
+`QStringView::size()` — это количество **UTF-16 code units** (2-байтовых машинных слов внутренней UTF-16 репрезентации `QString`). Это **не совпадает** с тем, что считает std-версия для `char`-строк (там — байты/UTF-8 code units): предельная длина, заданная числом для `vd::string_rules::max_length`, не переносится буквально на `vd::qt::string_rules::max_length` для того же текста — единицы разные. Как и в std-версии, суррогатные пары и составные grapheme-кластеры (эмодзи, комбинируемые диакритики) считаются не так, как «символы на экране».
+
+### Валидация параметров конструктора
+
+Как и в std-версии, конструкторы бросают `vd::assertion_exception` через `vd::ct_require` при некорректных аргументах (`max_len == 0`, `min_len == 0`, `max_len < min_len`) — это runtime-проверка, а не ошибка компиляции, несмотря на `constexpr`:
+
+```cpp
+vd::qt::string_rules::max_length(0);              // throw vd::assertion_exception
+vd::qt::string_rules::length_in_between(10, 5);   // throw vd::assertion_exception
+```
+
+---
+
 ## `qregex_checker` — runtime-паттерн через QRegularExpression
 
 ```cpp
