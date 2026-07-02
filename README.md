@@ -25,13 +25,14 @@ vd::result r = user_model.check(u);  // r.is_valid == true
 ## Features
 
 - **Declarative models** — compose validation rules for any struct or class using a fluent builder API
+- **Compile-time models** — `vd::static_model<T, Rules...>` bakes the rule set into the type itself for a heap-alloc-free validation pipeline, alongside the runtime `vd::basic_model<T>`
 - **Rich results** — `vd::result` carries all failed rule messages, not just a `bool`
-- **Type-safe rule factories** — `vd::member`, `vd::field`, `vd::predicate` with full template argument deduction; optional field names in error messages
+- **Type-safe rule factories** — `vd::member`, `vd::field`, `vd::predicate` (and `vd::statics::member`/`vd::statics::field` for `static_model`) with full template argument deduction; optional field names in error messages
 - **Numeric bounds** — inclusive/exclusive ranges, one-sided bounds, and outside-range checks for all arithmetic types
-- **String checkers** — compile-time patterns via [CTRE](https://github.com/hanickadot/compile-time-regular-expressions), runtime `std::regex`, and common presets (`email_like`, `uri_like`, `non_empty`, …)
+- **String checkers** — compile-time patterns via [CTRE](https://github.com/hanickadot/compile-time-regular-expressions), runtime `std::regex`, length checks (`min_length`, `max_length`, `length_in_between`), and common presets (`email_like`, `uri_like`, `non_empty`, …); most checkers work with any `std::basic_string_view<CharT>` / `std::basic_string<CharT>`, not just `std::string`
 - **Modern assertions** — `vd::require` with `std::format` messages, source-location diagnostics, optional exception throwing, and custom callbacks
-- **Non-null pointer contract** — `vd::not_null<T*>` enforces that a raw pointer parameter is never `nullptr`, checked at compile time or runtime
-- **Qt extension** — `QString` / `QStringView` checkers and `Q_PROPERTY` validation for Qt 5/6 projects
+- **Non-null pointer contract** — `vd::not_null<T*>` enforces that a raw pointer parameter is never `nullptr`, checked at compile time or runtime; `vd::memory::not_null` is the model-rule counterpart for pointer-like fields
+- **Qt extension** — `QString` / `QStringView` checkers (including length checks) and `Q_PROPERTY` validation for Qt 5/6 projects
 
 ## Requirements
 
@@ -169,6 +170,21 @@ bool all_ok = vd::validate_many(model, vec_of_objects);       // std::vector<T>
 bool all_ok = vd::validate_many(model, vec_of_pointers);      // std::vector<T*>
 ```
 
+### Static models: `vd::static_model<T, Rules...>`
+
+`vd::static_model<T, Rules...>` is a compile-time alternative to `basic_model<T>`: the rule set is baked into the model's *type* (a `std::tuple<Rules...>`) instead of stored in a runtime `std::vector`. Combined with `vd::statics::member`/`vd::statics::field` (which return raw lambdas instead of `rule<T>`), it builds a validation pipeline without any `std::function` heap allocations.
+
+```cpp
+auto model = vd::make_static_model<Point>()
+    .with(vd::statics::member(&Point::x, vd::double_bounds::inclusive(0.0, 100.0)))
+    .with(vd::statics::member(&Point::y, vd::double_bounds::inclusive(0.0, 100.0)))
+    .with([](const Point& p) { return p.x != p.y; });   // raw predicate lambdas work too
+
+vd::result r = model.check(point);      // same check()/short_check()/die_if_failed() contract as basic_model
+```
+
+Every `.with()` call returns a *new* `static_model<T, Rules..., NewRule>` — the original model is left untouched, since its rule set can't change without changing its type. There is no bound-model equivalent (`basic_bound_model`) and no `add_rule()` for `static_model`. Use `basic_model` when the rule set needs to be assembled at runtime or stored uniformly regardless of rule count; use `static_model` when the full rule set is known at compile time and allocation-free validation matters. See [docs/static-model.md](docs/static-model.md) for the full API.
+
 ### `vd::not_null<T*>`
 
 A lightweight contract wrapper that enforces a raw pointer is never `nullptr`. Intended as a function parameter type to express the non-null precondition in the signature itself.
@@ -212,15 +228,20 @@ Available aliases: `byte_bounds`, `short_bounds`, `int_bounds`, `long_bounds`, `
 ### String rules
 
 ```cpp
-vd::string_rules::non_empty()              // length > 0
-vd::string_rules::empty()                 // length == 0
-vd::string_rules::empty_or_whitespace()   // empty or ASCII whitespace only
-vd::string_rules::email_like()            // ^\S+@\S+\.\S+$ via CTRE
-vd::string_rules::uri_like()              // ^\w+://\S+$ via CTRE
-vd::string_rules::regex(R"(\d{5})")       // runtime std::regex (full-string match)
+vd::string_rules::non_empty()                    // length > 0
+vd::string_rules::empty()                        // length == 0
+vd::string_rules::empty_or_whitespace()           // empty or ASCII whitespace only
+vd::string_rules::email_like()                    // ^\S+@\S+\.\S+$ via CTRE
+vd::string_rules::uri_like()                      // ^\w+://\S+$ via CTRE
+vd::string_rules::regex(R"(\d{5})")               // runtime std::regex (full-string match)
+vd::string_rules::min_length(3)                   // length (code units) >= 3
+vd::string_rules::max_length(20)                  // length (code units) <= 20
+vd::string_rules::length_in_between(3, 20)        // 3 <= length <= 20
 ```
 
 All checkers accept `std::string_view` and return `vd::result`. `std::string` fields work without explicit conversion.
+
+`non_empty`, `empty`, `empty_or_whitespace`, and the three length checkers additionally accept any `std::basic_string_view<CharT>` / `std::basic_string<CharT>` (`wchar_t`, `char8_t`, `char16_t`, `char32_t`), so they work with `std::wstring`, `std::u16string`, etc. `email_like`, `uri_like`, and `regex` remain `std::string_view`-only. Length checkers count **code units**, not user-perceived characters — see [docs/string-rules.md](docs/string-rules.md) for the distinction. `min_length`/`max_length`/`length_in_between` throw `vd::assertion_exception` if constructed with invalid bounds (e.g. `max_length(0)` or `length_in_between(10, 5)`).
 
 ### `vd::require`
 
@@ -261,6 +282,8 @@ Drop-in counterparts for Qt types:
 vd::qt::string_rules::non_empty()
 vd::qt::string_rules::email_like()
 vd::qt::string_rules::regex(R"(\+7\d{10})")  // uses QRegularExpression / PCRE2
+vd::qt::string_rules::min_length(3)
+vd::qt::string_rules::max_length(280)        // counts UTF-16 code units — not portable 1:1 with the std-side byte count
 
 // Q_PROPERTY validation
 auto model = vd::basic_model<MyQObject>()
@@ -305,6 +328,10 @@ namespace my_rules {
     }
 }
 ```
+
+## Further reading
+
+The [`docs/`](docs/) directory covers the internals — design rationale, TMP/concept choices, and module-by-module reference (in Russian): [overview](docs/overview.md), [models](docs/models.md), [static-model](docs/static-model.md), [numeric](docs/numeric.md), [string-rules](docs/string-rules.md), [assert](docs/assert.md), [not_null](docs/not_null.md), [qt extensions](docs/qt%20extensions.md), [extending](docs/extending.md).
 
 ## License
 

@@ -11,6 +11,8 @@
 #include <QString>
 #include <QStringView>
 
+#include "assert/vd_assert.hxx"
+#include "core/vd_exception.hxx"
 #include "core/vd_result.hxx"
 
 namespace vd::qt::string_rules
@@ -69,6 +71,69 @@ bool empty_or_whitespace_string(QStringView s);
 // Reuses the same CTRE patterns as the std counterpart via UTF-8 conversion.
 bool email_like(QStringView s);
 bool uri_like(QStringView s);
+
+// Filters strings with size longer than given max length. WARN: QStringView::size() counts UTF-16 code units, not user-perceived
+// characters — and not the same unit as the std::string_view overload (UTF-8/byte code units), so length limits are not portable
+// between the two.
+struct max_length_t final {
+    std::size_t max_len;
+
+    constexpr max_length_t(std::size_t max_len) : max_len(max_len)
+    {
+        vd::ct_require<vd::assertion_exception>(max_len > 0, "max_len must be positive");
+    }
+
+    vd::result operator()(QStringView s) const
+    {
+        if(static_cast<std::size_t>(s.size()) > max_len) {
+            return vd::result::failed({ "string length exceeds the maximum allowed" });
+        }
+        return vd::result::ok();
+    }
+};
+
+// Filters strings with size shorter than given min length. WARN: QStringView::size() counts UTF-16 code units, not user-perceived
+// characters — and not the same unit as the std::string_view overload (UTF-8/byte code units), so length limits are not portable
+// between the two.
+struct min_length_t final {
+    std::size_t min_len;
+
+    constexpr min_length_t(std::size_t min_len) : min_len(min_len)
+    {
+        vd::ct_require<vd::assertion_exception>(min_len > 0, "min_len must be positive");
+    }
+
+    vd::result operator()(QStringView s) const
+    {
+        if(static_cast<std::size_t>(s.size()) < min_len) {
+            return vd::result::failed({ "string length is less than the minimum allowed" });
+        }
+        return vd::result::ok();
+    }
+};
+
+// Filters strings with size outside the given [min, max] range. WARN: QStringView::size() counts UTF-16 code units, not
+// user-perceived characters — and not the same unit as the std::string_view overload (UTF-8/byte code units), so length limits
+// are not portable between the two.
+struct length_in_between_t final {
+    std::size_t min_len;
+    std::size_t max_len;
+
+    constexpr length_in_between_t(std::size_t min_len, std::size_t max_len) : min_len(min_len), max_len(max_len)
+    {
+        vd::ct_require<vd::assertion_exception>(min_len > 0, "min_len must be positive");
+        vd::ct_require<vd::assertion_exception>(max_len > 0, "max_len must be positive");
+        vd::ct_require<vd::assertion_exception>(max_len >= min_len, "max_len must be greater than or equal to min_len");
+    }
+
+    vd::result operator()(QStringView s) const
+    {
+        if(static_cast<std::size_t>(s.size()) < min_len || static_cast<std::size_t>(s.size()) > max_len) {
+            return vd::result::failed({ "string length is not within the specified range" });
+        }
+        return vd::result::ok();
+    }
+};
 } // namespace vd::qt::string_rules::detail
 
 namespace vd::qt::string_rules
@@ -99,6 +164,30 @@ constexpr inline qstring_match<detail::uri_like> uri_like()
 }
 
 qregex_checker regex(QString pattern);
+
+// Tip: this checks a UTF-16 code unit length, which is not the same as user-perceived characters (grapheme clusters). For most
+// use cases this is sufficient, but be aware of this distinction if you are validating strings in languages with complex scripts
+// or emojis.
+constexpr inline detail::min_length_t min_length(std::size_t min_len)
+{
+    return detail::min_length_t(min_len);
+}
+
+// Tip: this checks a UTF-16 code unit length, which is not the same as user-perceived characters (grapheme clusters). For most
+// use cases this is sufficient, but be aware of this distinction if you are validating strings in languages with complex scripts
+// or emojis.
+constexpr inline detail::max_length_t max_length(std::size_t max_len)
+{
+    return detail::max_length_t(max_len);
+}
+
+// Tip: this checks a UTF-16 code unit length, which is not the same as user-perceived characters (grapheme clusters). For most
+// use cases this is sufficient, but be aware of this distinction if you are validating strings in languages with complex scripts
+// or emojis.
+constexpr inline detail::length_in_between_t length_in_between(std::size_t min_len, std::size_t max_len)
+{
+    return detail::length_in_between_t(min_len, max_len);
+}
 } // namespace vd::qt::string_rules
 
 #endif // VD_QSTRING_HXX

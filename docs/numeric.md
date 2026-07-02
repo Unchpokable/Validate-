@@ -1,14 +1,14 @@
 # Numeric module
 
-**Заголовок:** `#include <vd.hxx>`  
-**Файл реализации:** `src/models/vd_numeric.hxx`  
+**Header:** `#include <vd.hxx>`  
+**Implementation file:** `src/models/vd_numeric.hxx`  
 **Namespace:** `vd`
 
 ---
 
-## Назначение
+## Purpose
 
-Модуль предоставляет `numeric_bounds<T>` — checker для числовых типов, реализующий `value_checker` концепт. Используется как второй аргумент в `vd::field` / `vd::member`.
+The module provides `numeric_bounds<T>` — a checker for numeric types, implementing the `value_checker` concept. Used as the second argument to `vd::field` / `vd::member`.
 
 ---
 
@@ -32,14 +32,14 @@ struct numeric_bounds final {
 };
 ```
 
-### Концепт `numeric_compatible`
+### The `numeric_compatible` concept
 
 ```cpp
-// Определён в src/utils/vd_ctnextafter.hxx:
+// Defined in src/utils/vd_ctnextafter.hxx:
 template<typename T>
 concept generic_numer = std::integral<T> || std::floating_point<T>;
 
-// Определён в src/models/vd_numeric.hxx:
+// Defined in src/models/vd_numeric.hxx:
 template<typename T>
 concept arithmetic = std::is_arithmetic_v<T>;
 
@@ -47,49 +47,49 @@ template<typename T>
 concept numeric_compatible = generic_numer<T> && arithmetic<T>;
 ```
 
-Принимает: `int`, `double`, `float`, `uint8_t`, `int64_t` и т.д.  
-Не принимает: `bool`, классы, указатели.
+Accepts: `int`, `double`, `float`, `uint8_t`, `int64_t`, etc.  
+Rejects: `bool`, classes, pointers.
 
-### Фабричные методы
+### Factory methods
 
-| Метод | Семантика | Пример |
+| Method | Semantics | Example |
 |-------|-----------|--------|
 | `inclusive(min, max)` | `value >= min && value <= max` | `[0, 100]` |
 | `exclusive(min, max)` | `value > min && value < max` | `(0, 100)` |
 | `greater_than(min)` | `value > min` | `(5, +∞)` |
 | `less_than(max)` | `value < max` | `(-∞, 10)` |
-| `unbounded()` | всегда `true` | `(-∞, +∞)` |
-| `outside_inclusive(lo, hi)` | `value <= lo \|\| value >= hi` | вне `[lo, hi]` |
-| `outside_exclusive(lo, hi)` | `value < lo \|\| value > hi` | вне `(lo, hi)` |
+| `unbounded()` | always `true` | `(-∞, +∞)` |
+| `outside_inclusive(lo, hi)` | `value <= lo \|\| value >= hi` | outside `[lo, hi]` |
+| `outside_exclusive(lo, hi)` | `value < lo \|\| value > hi` | outside `(lo, hi)` |
 
-### Реализация exclusive-границ
+### Implementation of exclusive bounds
 
-`exclusive`, `greater_than`, `less_than`, `outside_exclusive` реализованы через библиотечный `vd::ct_nextafter<T>` — `constexpr`-аналог `std::nextafter`, поддерживающий и целые числа, и числа с плавающей точкой:
+`exclusive`, `greater_than`, `less_than`, `outside_exclusive` are implemented via the library's `vd::ct_nextafter<T>` — a `constexpr` analogue of `std::nextafter`, supporting both integers and floating-point numbers:
 
 ```cpp
-// exclusive(0.0, 1.0) создаёт bounds с:
+// exclusive(0.0, 1.0) creates bounds with:
 min = ct_nextafter(0.0, std::numeric_limits<double>::max());    // 0.0 + epsilon
 max = ct_nextafter(1.0, std::numeric_limits<double>::lowest()); // 1.0 - epsilon
 
-// exclusive(0, 10) для int:
+// exclusive(0, 10) for int:
 min = ct_nextafter(0, std::numeric_limits<int>::max());  // 1
 max = ct_nextafter(10, std::numeric_limits<int>::min()); // 9
 ```
 
-Это работает корректно как для `float`/`double`, так и для целочисленных типов.
+This works correctly both for `float`/`double` and for integer types.
 
 ---
 
-## Примеры использования
+## Usage examples
 
 ```cpp
-// Поле int в диапазоне [1, 100]
+// int field in range [1, 100]
 vd::member(&User::age, vd::int_bounds::inclusive(1, 100))
 
-// Getter double строго больше нуля
+// double getter strictly greater than zero
 vd::field(&Sensor::get_value, vd::double_bounds::greater_than(0.0))
 
-// float строго меньше 1.0 (exclusive)
+// float strictly less than 1.0 (exclusive)
 vd::member(&Data::ratio, vd::float_bounds::exclusive(0.0f, 1.0f))
 ```
 
@@ -115,15 +115,15 @@ using unsigned_long_bounds = numeric_bounds<std::uint64_t>;
 
 ### Models
 
-Готовые псевдонимы `basic_model<T>` для числовых типов:
+Ready-made `basic_model<T>` aliases for numeric types:
 
 ```cpp
 using int_model    = basic_model<std::int32_t>;
 using double_model = basic_model<double>;
-// ... и т.д.
+// ... etc.
 ```
 
-Пример использования:
+Usage example:
 ```cpp
 vd::int_model age_model;
 age_model.with(vd::predicate([](const int& v) { return v > 0 && v < 150; }));
@@ -140,7 +140,7 @@ namespace vd::numeric {
 }
 ```
 
-Возвращает правило, которое проверяет `std::isfinite(value)`. Применяется к полям с плавающей точкой, чтобы отфильтровать `NaN` и `inf`:
+Returns a rule that checks `std::isfinite(value)`. Applied to floating-point fields to filter out `NaN` and `inf`:
 
 ```cpp
 auto model = vd::basic_model<Measurement>()
@@ -148,19 +148,19 @@ auto model = vd::basic_model<Measurement>()
     .with(vd::numeric::finite<double>());
 ```
 
-Правило `std::isfinite(const T& value)` всегда `true`, если тип `T` является целочисленным.
+The `std::isfinite(const T& value)` rule is always `true` if `T` is an integral type.
 
 ---
 
-## Добавление нового числового checker-а
+## Adding a new numeric checker
 
-`numeric_bounds` реализует одну проверку — диапазон. Для специфических нужд (например, проверка чётности) достаточно написать лямбду:
+`numeric_bounds` implements a single check — a range. For more specific needs (e.g. checking parity), a lambda is enough:
 
 ```cpp
 auto even_rule = vd::predicate([](const int& v) { return v % 2 == 0; });
 ```
 
-Или создать отдельный checker-тип, удовлетворяющий `value_checker`:
+Or create a separate checker type satisfying `value_checker`:
 
 ```cpp
 struct divisible_by {

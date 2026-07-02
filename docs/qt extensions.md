@@ -1,15 +1,15 @@
 # Qt extensions module
 
-**Заголовки:** `#include "ext/qt/vd_qtbase.hxx"` — Qt Base (QString, QProperty)  
-**Файлы реализации:** `src/ext/qt/qtbase/vd_qstring.hxx`, `src/ext/qt/qtbase/vd_qstring.cxx`, `src/ext/qt/qtbase/vd_qproperty.hxx`  
+**Headers:** `#include "ext/qt/vd_qtbase.hxx"` — Qt Base (QString, QProperty)  
+**Implementation files:** `src/ext/qt/qtbase/vd_qstring.hxx`, `src/ext/qt/qtbase/vd_qstring.cxx`, `src/ext/qt/qtbase/vd_qproperty.hxx`  
 **Namespace:** `vd::qt`, `vd::qt::string_rules`  
-**Зависимость:** Qt 5/6 (QtCore), CTRE (`src/inline_deps/ctre.hpp`)
+**Dependency:** Qt 5/6 (QtCore), CTRE (`src/inline_deps/ctre.hpp`)
 
 ---
 
-## Назначение
+## Purpose
 
-Qt-расширение добавляет checker-ы и фабрики правил, которые работают с Qt-типами напрямую — без конвертации в стандартные C++ типы. Все типы из этого модуля совместимы с `value_checker` концептом и используются с теми же `vd::member` / `vd::field` / `vd::predicate`, что и в базовой библиотеке.
+The Qt extension adds checkers and rule factories that work with Qt types directly — without converting to standard C++ types. All types in this module satisfy the `value_checker` concept and are used with the same `vd::member` / `vd::field` / `vd::predicate` as in the base library.
 
 ```cpp
 #include "ext/qt/vd_qtbase.hxx"
@@ -30,26 +30,26 @@ auto form_model = vd::basic_model<RegistrationForm>()
 
 ---
 
-## Структура модуля
+## Module structure
 
 ```
 src/ext/qt/
-├── vd_qtbase.hxx          # Агрегирующий заголовок: qtbase-подмодули
+├── vd_qtbase.hxx          # Aggregating header: qtbase submodules
 │   ├── qtbase/
-│   │   ├── vd_qstring.hxx # qstring_match, qregex_checker, фабрики
+│   │   ├── vd_qstring.hxx # qstring_match, qregex_checker, factories
 │   │   └── vd_qproperty.hxx # qt_property()
 │
-├── vd_qtwidgets.hxx       # Зарезервировано (пока пусто)
-└── vd_qml.hxx             # Зарезервировано (пока пусто)
+├── vd_qtwidgets.hxx       # Reserved (currently empty)
+└── vd_qml.hxx             # Reserved (currently empty)
 ```
 
 ---
 
-## `vd::qt::string_rules` — checker-ы для QString
+## `vd::qt::string_rules` — checkers for QString
 
-Зеркало `vd::string_rules`, переписанное для `QStringView` / `QString`. API идентичен, поведение адаптировано под Qt-семантику.
+A mirror of `vd::string_rules`, rewritten for `QStringView` / `QString`. The API is identical, the behavior adapted to Qt semantics.
 
-### `qstring_match<Matcher>` — основной тип checker-а
+### `qstring_match<Matcher>` — the core checker type
 
 ```cpp
 template<auto Matcher>
@@ -67,9 +67,9 @@ struct qstring_match {
 };
 ```
 
-Поле `check_description` передаётся в `vd::result::failed_rules` при провале. Фабричные функции задают осмысленное описание автоматически.
+The `check_description` field is passed to `vd::result::failed_rules` on failure. Factory functions set a meaningful description automatically.
 
-Аналог `vd::string_rules::string_match<Matcher>`, но оперирует `QStringView` вместо `std::string_view`. Поскольку `const QString&` неявно конвертируется в `QStringView`, checker совместим с `vd::member` на полях типа `QString`:
+An analogue of `vd::string_rules::string_match<Matcher>`, but operating on `QStringView` instead of `std::string_view`. Since `const QString&` implicitly converts to `QStringView`, the checker is compatible with `vd::member` on fields of type `QString`:
 
 ```cpp
 struct Profile {
@@ -82,7 +82,7 @@ auto model = vd::basic_model<Profile>()
     .with(vd::member(&Profile::bio,      vd::qt::string_rules::empty_or_whitespace()));
 ```
 
-### Концепт `qstring_matcher`
+### The `qstring_matcher` concept
 
 ```cpp
 template<auto Matcher>
@@ -91,17 +91,17 @@ concept qstring_matcher =
     && std::convertible_to<std::invoke_result_t<decltype(Matcher), QStringView>, bool>;
 ```
 
-NTTP-параметр `Matcher` — функция `bool(QStringView)` без состояния. Требования те же, что и у `string_matcher` в базовом модуле.
+The NTTP parameter `Matcher` is a stateless `bool(QStringView)` function. The requirements are the same as for `string_matcher` in the base module.
 
 ### `mode::include` / `mode::exclude`
 
-`mode::exclude` инвертирует результат матчера — тот же механизм, что и в базовом `string_match`. Напрямую конструировать с `mode` нужно редко, т.к. для всех стандартных случаев есть фабрики.
+`mode::exclude` inverts the matcher's result — the same mechanism as in the base `string_match`. Constructing with `mode` directly is rarely needed, since factories cover all the standard cases.
 
 ---
 
-## Фабричные функции
+## Factory functions
 
-Все функции возвращают checker, совместимый с `value_checker`.
+All functions return a checker compatible with `value_checker`.
 
 ### `empty()`
 
@@ -109,7 +109,7 @@ NTTP-параметр `Matcher` — функция `bool(QStringView)` без с
 qstring_match<detail::empty_string> empty();
 ```
 
-`true` только для `QString("")`. Использует `QStringView::isEmpty()`.
+`true` only for `QString("")`. Uses `QStringView::isEmpty()`.
 
 ### `non_empty()`
 
@@ -117,7 +117,7 @@ qstring_match<detail::empty_string> empty();
 qstring_match<detail::non_empty_string> non_empty();
 ```
 
-`true` для любой непустой строки, включая строки из одних пробелов.
+`true` for any non-empty string, including strings made only of spaces.
 
 ### `empty_or_whitespace()`
 
@@ -125,9 +125,9 @@ qstring_match<detail::non_empty_string> non_empty();
 qstring_match<detail::empty_or_whitespace_string> empty_or_whitespace();
 ```
 
-`true` если строка пуста или состоит только из символов, для которых `QChar::isSpace()` возвращает `true`.
+`true` if the string is empty or consists only of characters for which `QChar::isSpace()` returns `true`.
 
-**Отличие от std-версии:** базовый `empty_or_whitespace_string` проверяет ограниченный набор ASCII-пробелов (`' '`, `'\t'`, `'\n'`, `'\r'`, `'\f'`, `'\v'`). Qt-версия использует `QChar::isSpace()`, которая покрывает все Unicode-пробелы (U+00A0 NO-BREAK SPACE, U+2003 EM SPACE и т.д.), что соответствует Qt-идиомам при работе с интернациональным текстом.
+**Difference from the std version:** the base `empty_or_whitespace_string` checks a limited set of ASCII whitespace (`' '`, `'\t'`, `'\n'`, `'\r'`, `'\f'`, `'\v'`). The Qt version uses `QChar::isSpace()`, which covers all Unicode whitespace (U+00A0 NO-BREAK SPACE, U+2003 EM SPACE, etc.), matching Qt idioms for working with internationalized text.
 
 ### `email_like()`
 
@@ -135,7 +135,7 @@ qstring_match<detail::empty_or_whitespace_string> empty_or_whitespace();
 qstring_match<detail::email_like> email_like();
 ```
 
-Минимальная эвристика: паттерн `^\S+@\S+\.\S+$` через CTRE. Строка конвертируется в UTF-8 (`QStringView::toUtf8()`) перед передачей в CTRE — те же compile-time паттерны, что в базовом модуле.
+A minimal heuristic: the pattern `^\S+@\S+\.\S+$` via CTRE. The string is converted to UTF-8 (`QStringView::toUtf8()`) before being passed to CTRE — the same compile-time patterns as in the base module.
 
 ### `uri_like()`
 
@@ -143,11 +143,53 @@ qstring_match<detail::email_like> email_like();
 qstring_match<detail::uri_like> uri_like();
 ```
 
-Паттерн `^\w+://\S+$` через CTRE. Та же логика конвертации в UTF-8.
+The pattern `^\w+://\S+$` via CTRE. Same UTF-8 conversion logic.
 
 ---
 
-## `qregex_checker` — runtime-паттерн через QRegularExpression
+## Length rules: `min_length` / `max_length` / `length_in_between`
+
+A mirror of the std version from [string-rules.md](string-rules.md#string-length-rules-min_length--max_length--length_in_between), but without `CharT` generalization — `QString` is always UTF-16 internally, so a separate template over the character type isn't needed:
+
+```cpp
+constexpr detail::min_length_t         min_length(std::size_t min_len);
+constexpr detail::max_length_t         max_length(std::size_t max_len);
+constexpr detail::length_in_between_t  length_in_between(std::size_t min_len, std::size_t max_len);
+```
+
+Each checker calls `QStringView::size()` and compares it against the bounds:
+
+```cpp
+struct max_length_t final {
+    std::size_t max_len;
+    constexpr max_length_t(std::size_t max_len);   // throws vd::assertion_exception if max_len == 0
+
+    vd::result operator()(QStringView s) const;    // error if s.size() > max_len
+};
+```
+
+```cpp
+auto model = vd::basic_model<Profile>()
+    .with(vd::member(&Profile::username, vd::qt::string_rules::min_length(3)))
+    .with(vd::member(&Profile::bio,      vd::qt::string_rules::max_length(280)));
+```
+
+### Unit of measurement: UTF-16 code units, not bytes and not graphemes
+
+`QStringView::size()` is the count of **UTF-16 code units** (2-byte machine words of `QString`'s internal UTF-16 representation). This **does not match** what the std version counts for `char` strings (there — bytes/UTF-8 code units): a length limit given as a number for `vd::string_rules::max_length` does not carry over literally to `vd::qt::string_rules::max_length` for the same text — the units differ. As with the std version, surrogate pairs and composite grapheme clusters (emoji, combining diacritics) are counted differently from "characters on screen".
+
+### Constructor parameter validation
+
+As with the std version, the constructors throw `vd::assertion_exception` via `vd::ct_require` on invalid arguments (`max_len == 0`, `min_len == 0`, `max_len < min_len`) — this is a runtime check, not a compile error, despite `constexpr`:
+
+```cpp
+vd::qt::string_rules::max_length(0);              // throw vd::assertion_exception
+vd::qt::string_rules::length_in_between(10, 5);   // throw vd::assertion_exception
+```
+
+---
+
+## `qregex_checker` — runtime pattern via QRegularExpression
 
 ```cpp
 struct qregex_checker {
@@ -159,9 +201,9 @@ struct qregex_checker {
 };
 ```
 
-Аналог `vd::string_rules::regex_checker`, но использует `QRegularExpression` (PCRE2) вместо `std::regex`.
+An analogue of `vd::string_rules::regex_checker`, but using `QRegularExpression` (PCRE2) instead of `std::regex`.
 
-### Фабричная функция `regex()`
+### The `regex()` factory function
 
 ```cpp
 qregex_checker regex(QString pattern);
@@ -173,33 +215,33 @@ auto model = vd::basic_model<Form>()
                      vd::qt::string_rules::regex(R"(\+7\d{10})")));
 ```
 
-### Семантика совпадения
+### Match semantics
 
-Используется **full-string match** (аналог `std::regex_match`, а не `std::regex_search`): совпадение засчитывается только если `capturedStart() == 0` и `capturedLength() == s.size()`. Паттерн должен описывать всю строку целиком.
+A **full-string match** is used (analogous to `std::regex_match`, not `std::regex_search`): a match counts only if `capturedStart() == 0` and `capturedLength() == s.size()`. The pattern must describe the entire string.
 
-### Невалидный паттерн
+### Invalid pattern
 
-Если `QRegularExpression::isValid()` возвращает `false`, вызывается `vd::require(false, ...)` → `std::abort()` с диагностикой в `stderr`.
+If `QRegularExpression::isValid()` returns `false`, `vd::require(false, ...)` is called → `std::abort()` with diagnostics on `stderr`.
 
 ```cpp
 auto bad = vd::qt::string_rules::regex("[invalid");
 bad(QStringView{});  // abort: "Invalid regex pattern: [invalid"
 ```
 
-### Преимущество над `std::regex`
+### Advantage over `std::regex`
 
-`QRegularExpression` основан на PCRE2 и поддерживает полный Unicode из коробки, именованные группы, look-ahead/behind и прочие PCRE2-возможности, недоступные в `std::regex`.
+`QRegularExpression` is based on PCRE2 and supports full Unicode out of the box, named groups, look-ahead/behind, and other PCRE2 features unavailable in `std::regex`.
 
 ---
 
-## `vd::qt::qt_property` — валидация Q_PROPERTY
+## `vd::qt::qt_property` — validating Q_PROPERTY
 
 ```cpp
 template<typename T, typename Checker>
 auto qt_property(const QString& prop_name, Checker checker) -> rule<T>;
 ```
 
-Создаёт `rule<T>` для чтения Qt-свойства (объявленного через `Q_PROPERTY`) и проверки его значения checker-ом. `T` должен быть наследником `QObject`.
+Creates a `rule<T>` that reads a Qt property (declared via `Q_PROPERTY`) and validates its value with a checker. `T` must derive from `QObject`.
 
 ```cpp
 struct Widget : QObject {
@@ -215,11 +257,11 @@ auto model = vd::basic_model<Widget>()
               "enabled", [](bool v) { return v; }));
 ```
 
-### Вывод типа свойства
+### Property type deduction
 
-Тип значения свойства `PropT` выводится из первого аргумента `Checker` через `detail::first_arg_of<Checker>`. Это тот же трейт, что используется в базовом `vd::predicate`.
+The property's value type `PropT` is deduced from `Checker`'s first argument via `detail::first_arg_of<Checker>`. This is the same trait used in the base `vd::predicate`.
 
-**Ограничение:** для generic-лямбд и `std::function` вывод типа невозможен. В таких случаях нужно явно создать `rule<T>`:
+**Limitation:** type deduction is impossible for generic lambdas and `std::function`. In such cases, create `rule<T>` explicitly:
 
 ```cpp
 vd::rule<Widget> r([](const Widget& w) {
@@ -227,24 +269,24 @@ vd::rule<Widget> r([](const Widget& w) {
 });
 ```
 
-### Цепочка проверок внутри правила
+### Chain of checks inside the rule
 
-Правило возвращает `vd::result` с ошибкой в следующих случаях (без abort, просто провал):
+The rule returns a `vd::result` with an error in the following cases (no abort, just a failing rule):
 
-| Ситуация | Поведение |
+| Situation | Behavior |
 |----------|-----------|
-| `T` не является `QObject` | `vd::result::failed({"Object is not a QObject"})` |
-| Свойство `prop_name` не существует | `vd::result::failed({"Property is not valid"})` |
-| Значение `QVariant` нельзя сконвертировать в `PropT` | `vd::result::failed({"Property cannot be converted to expected type"})` |
-| Checker возвращает провал | `vd::result::failed({...сообщение от checker-а...})` |
+| `T` is not a `QObject` | `vd::result::failed({"Object is not a QObject"})` |
+| Property `prop_name` doesn't exist | `vd::result::failed({"Property is not valid"})` |
+| The `QVariant` value can't be converted to `PropT` | `vd::result::failed({"Property cannot be converted to expected type"})` |
+| The checker returns a failure | `vd::result::failed({...message from the checker...})` |
 
-Имя свойства сохраняется как `QByteArray` (UTF-8) внутри замыкания — конвертация из `QString` происходит один раз при создании правила, не при каждой проверке.
+The property name is stored as `QByteArray` (UTF-8) inside the closure — the conversion from `QString` happens once when the rule is created, not on every check.
 
 ---
 
-## Подключение
+## Inclusion
 
-Модуль включается через `<vd.hxx>` **автоматически**, когда CMake-опция `VD_EXTENSION_QT_BASE` установлена в `ON`. В этом случае компилятор получает макрос `VD_ENABLE_EXTENSION_QT_BASE`, и `vd_ext.hxx` подтягивает `vd_qtbase.hxx` в рамках основного заголовка.
+The module is included via `<vd.hxx>` **automatically** when the CMake option `VD_EXTENSION_QT_BASE` is set to `ON`. In that case, the compiler gets the `VD_ENABLE_EXTENSION_QT_BASE` macro, and `vd_ext.hxx` pulls in `vd_qtbase.hxx` as part of the main header.
 
 ```cmake
 set(VD_EXTENSION_QT_BASE ON CACHE BOOL "" FORCE)
@@ -253,27 +295,27 @@ target_link_libraries(my_target PRIVATE Validate::vd Qt6::Core)
 ```
 
 ```cpp
-#include <vd.hxx>  // Qt extensions уже внутри
+#include <vd.hxx>  // Qt extensions are already included
 ```
 
-При необходимости подмодули можно включить явно (например, в проектах без FetchContent):
+If needed, submodules can be included explicitly (e.g. in projects without FetchContent):
 
 ```cpp
-// Весь qtbase (QString + QProperty):
+// The whole qtbase (QString + QProperty):
 #include "ext/qt/vd_qtbase.hxx"
 
-// Только QString-checker-ы:
+// Only the QString checkers:
 #include "ext/qt/qtbase/vd_qstring.hxx"
 
-// Только qt_property:
+// Only qt_property:
 #include "ext/qt/qtbase/vd_qproperty.hxx"
 ```
 
 ---
 
-## Планируемые подмодули
+## Planned submodules
 
-| Файл | Статус | Назначение |
+| File | Status | Purpose |
 |------|--------|------------|
-| `vd_qtwidgets.hxx` | Зарезервирован | Checker-ы для QWidget-свойств |
-| `vd_qml.hxx` | Зарезервирован | Интеграция с QML-контекстом |
+| `vd_qtwidgets.hxx` | Reserved | Checkers for QWidget properties |
+| `vd_qml.hxx` | Reserved | Integration with the QML context |

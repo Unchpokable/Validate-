@@ -1,18 +1,18 @@
-# Расширение библиотеки
+# Extending the library
 
-Этот документ описывает, как добавлять новые checker-ы, новые типы моделей и как развивать существующие абстракции.
+This document describes how to add new checkers, new model types, and how to evolve the existing abstractions.
 
 ---
 
-## Написание нового checker-а
+## Writing a new checker
 
-Требование одно: тип должен быть callable `V -> bool` или `V -> vd::result` (удовлетворять `value_checker<Checker, V>`). Никакого наследования, макросов или регистрации не нужно.
+There's a single requirement: the type must be callable `V -> bool` or `V -> vd::result` (i.e. satisfy `value_checker<Checker, V>`). No inheritance, macros, or registration needed.
 
-Возврат `vd::result` предпочтительнее — он позволяет передать текст ошибки, который попадёт в `vd::result::failed_rules`.
+Returning `vd::result` is preferable — it lets you pass error text that ends up in `vd::result::failed_rules`.
 
-### Вариант 1: лямбда
+### Option 1: lambda
 
-Самый простой случай. Используется прямо в месте создания правила:
+The simplest case. Used right at the point where the rule is created:
 
 ```cpp
 auto model = vd::basic_model<Product>()
@@ -20,9 +20,9 @@ auto model = vd::basic_model<Product>()
     .with(vd::predicate([](const Product& p) { return !p.name.empty() && p.sku > 0; }));
 ```
 
-### Вариант 2: структура со state
+### Option 2: a struct with state
 
-Когда checker параметризован runtime-данными:
+When the checker is parameterized by runtime data:
 
 ```cpp
 struct multiple_of {
@@ -46,9 +46,9 @@ auto model = vd::basic_model<Item>()
     .with(vd::member(&Item::label,    min_length{3}));
 ```
 
-### Вариант 3: `string_match<Matcher>` для строк без состояния
+### Option 3: `string_match<Matcher>` for stateless string checkers
 
-Когда matcher — stateless функция `bool(std::string_view)` и нужна поддержка `mode::include/exclude`:
+When the matcher is a stateless function `bool(std::string_view)` and `mode::include/exclude` support is needed:
 
 ```cpp
 namespace my_rules {
@@ -60,12 +60,12 @@ namespace my_rules {
     }
 }
 
-// Использование:
+// Usage:
 auto checker = vd::string_rules::string_match<my_rules::is_hex_color>{
     vd::string_rules::string_match<my_rules::is_hex_color>::mode::include
 };
 
-// Фабричная функция (рекомендуется для читаемости):
+// Factory function (recommended for readability):
 inline auto hex_color() {
     return vd::string_rules::string_match<my_rules::is_hex_color>{
         vd::string_rules::string_match<my_rules::is_hex_color>::mode::include
@@ -75,16 +75,16 @@ inline auto hex_color() {
 
 ---
 
-## Добавление нового модуля checker-ов
+## Adding a new checker module
 
-По аналогии с `vd_numeric.hxx` и `vd_string_rules.hxx`:
+Following the pattern of `vd_numeric.hxx` and `vd_string_rules.hxx`:
 
-1. Создайте `src/models/vd_<your_module>.hxx`
-2. Добавьте `#include "models/vd_<your_module>.hxx"` в `src/vd_models.hxx`
-3. Определите checker-типы в namespace `vd` или `vd::<your_namespace>`
-4. Все функции-фабрики в `.hxx` должны быть `inline`
+1. Create `src/models/vd_<your_module>.hxx`
+2. Add `#include "models/vd_<your_module>.hxx"` to `src/vd_models.hxx`
+3. Define checker types in namespace `vd` or `vd::<your_namespace>`
+4. All factory functions in the `.hxx` must be `inline`
 
-Шаблон нового модуля:
+Template for a new module:
 
 ```cpp
 #pragma once
@@ -93,16 +93,16 @@ inline auto hex_color() {
 
 #include "vd_basic_model.hxx"
 #include "core/vd_result.hxx"
-// ... другие нужные заголовки
+// ... other headers as needed
 
 namespace vd::my_rules
 {
 struct my_checker {
-    /* параметры */
-    vd::result operator()(/* тип значения */ v) const;
+    /* parameters */
+    vd::result operator()(/* value type */ v) const;
 };
 
-inline my_checker some_condition(/* параметры */)
+inline my_checker some_condition(/* parameters */)
 {
     return { /* ... */ };
 }
@@ -113,21 +113,23 @@ inline my_checker some_condition(/* параметры */)
 
 ---
 
-## Расширение `basic_model`
+## Extending `basic_model`
 
-`basic_model<T>` намеренно минималистичен: только набор правил и `check()`. Если нужен специализированный тип модели (например, с кешированием результатов, именованными правилами или агрегацией ошибок), наследоваться не нужно — достаточно написать новый тип, который использует `rule<T>` внутри.
+`basic_model<T>` is intentionally minimalistic: just a set of rules and `check()`. If you need a specialized model type (e.g. with result caching, named rules, or error aggregation), there's no need to inherit — just write a new type that uses `rule<T>` internally.
+
+If, instead of a specialized model, you just need a heap-alloc-free pipeline with a rule set known at compile time — `vd::static_model<T, Rules...>` already provides that, no custom type needed. See [static-model.md](static-model.md).
 
 ---
 
-## Тесты
+## Tests
 
-При добавлении нового модуля создавайте отдельный тестовый файл в `tests/`:
+When adding a new module, create a separate test file in `tests/`:
 
 ```
 tests/test_<module>.cxx
 ```
 
-Зарегистрируйте его в `tests/CMakeLists.txt`:
+Register it in `tests/CMakeLists.txt`:
 
 ```cmake
 add_executable(test_my_module test_my_module.cxx)
@@ -135,4 +137,4 @@ target_link_libraries(test_my_module PRIVATE Validate::vd GTest::gtest_main)
 gtest_discover_tests(test_my_module)
 ```
 
-Принцип тестирования: если тест падает — это повод пересмотреть реализацию, а не подгонять тест.
+Testing principle: if a test fails, that's a reason to revisit the implementation, not to adjust the test.
