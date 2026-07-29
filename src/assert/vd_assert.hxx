@@ -77,7 +77,7 @@ void require_callback(Cond&& condition, detail::assert_format<std::type_identity
     }
 }
 
-#if not defined(_NDEBUG) || not defined(NDEBUG)
+#if not defined(_NDEBUG) || not defined(NDEBUG) || not defined(RELEASE)
 
 /// same as require() but working only in debug builds
 template<detail::contextually_bool Cond, typename... Args>

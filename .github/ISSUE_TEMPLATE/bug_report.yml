@@ -1,0 +1,146 @@
+name: Bug Report
+description: Report something that's broken, doesn't work, or behaves unexpectedly in Validate!
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the sections below as completely as possible — the more detail you provide, the faster this can be diagnosed and fixed.
+
+        The issue title above should be a short, one-line summary of the problem.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What were you trying to achieve? What was the end goal of the code you were writing?
+      placeholder: e.g. I was trying to validate a struct with a Q_PROPERTY-backed string field using the Qt extension...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed, step-by-step instructions to reproduce the bug. Include a minimal code snippet if possible.
+      placeholder: |
+        1. Define a model with `vd::member(...)`
+        2. Call `model.check(obj)` on an instance where ...
+        3. ...
+
+        ```cpp
+        // minimal reproducible example
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened instead? Include the exact error message, compiler diagnostic, stack trace, or unexpected output — paste raw text/logs as a code block.
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "## Environment"
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS Version
+      placeholder: e.g. Windows 10 Pro 22H2, Ubuntu 22.04, macOS 14.4
+    validations:
+      required: false
+
+  - type: dropdown
+    id: compiler
+    attributes:
+      label: Compiler
+      options:
+        - MSVC
+        - GCC
+        - Clang
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: compiler-version
+    attributes:
+      label: Compiler Version
+      placeholder: "e.g. MSVC 19.38 (VS 2022 17.8), GCC 13.2, Clang 17"
+    validations:
+      required: true
+
+  - type: input
+    id: cmake-version
+    attributes:
+      label: CMake Version
+      placeholder: e.g. 3.28.1
+    validations:
+      required: true
+
+  - type: input
+    id: generator
+    attributes:
+      label: Build System / Generator
+      placeholder: e.g. Ninja Multi-Config, Visual Studio 17 2022, Unix Makefiles
+    validations:
+      required: false
+
+  - type: input
+    id: vd-version
+    attributes:
+      label: Validate! Version / Commit
+      description: Release tag, branch, or commit hash you're building against.
+      placeholder: e.g. v0.1.0, devel@09c120b
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: qt-extension
+    attributes:
+      label: Qt Extension
+      description: Check this if the bug involves the Qt extension.
+      options:
+        - label: This bug involves the Qt extension (VD_EXTENSION_QT_BASE=ON)
+          required: false
+
+  - type: input
+    id: qt-version
+    attributes:
+      label: Qt Version (if applicable)
+      placeholder: e.g. Qt 6.9.2
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Anything else that might help — full build log, CI link, related issues, etc.
+    validations:
+      required: false
