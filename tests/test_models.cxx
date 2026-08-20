@@ -1,9 +1,12 @@
 #include "models/vd_numeric.hxx"
 #include "models/vd_rule_factory.hxx"
 #include "gtest/gtest.h"
+#include <cstdint>
 #include <gtest/gtest.h>
 #include <limits>
 #include <memory>
+#include <string>
+#include <type_traits>
 
 #define VD_EXPORT_UNSAFE
 #include <vd.hxx>
@@ -145,54 +148,52 @@ TEST(NumericBoundsTest, IntegerLessThanStepsByOne)
 
 TEST(NumericBoundsTest, IntegerAlwaysFinite)
 {
-    auto rule = vd::numeric::finite<int>();
+    // finite_guard::operator() is a template, so one object serves every
+    // arithmetic type — no per-type instantiation of the guard is needed.
+    EXPECT_TRUE(vd::numeric::finite_t(static_cast<int>(5)));
+    EXPECT_TRUE(vd::numeric::finite_t(std::numeric_limits<int>::max()));
+    EXPECT_TRUE(vd::numeric::finite_t(std::numeric_limits<int>::lowest()));
 
-    EXPECT_TRUE(rule(static_cast<int>(5)));
-    EXPECT_TRUE(rule(std::numeric_limits<int>::max()));
-    EXPECT_TRUE(rule(std::numeric_limits<int>::lowest()));
-
-    auto rule_unsigned = vd::numeric::finite<unsigned int>();
-
-    EXPECT_TRUE(rule(static_cast<unsigned int>(5)));
-    EXPECT_TRUE(rule(std::numeric_limits<unsigned int>::max()));
-    EXPECT_TRUE(rule(std::numeric_limits<unsigned int>::lowest()));
+    EXPECT_TRUE(vd::numeric::finite_t(static_cast<unsigned int>(5)));
+    EXPECT_TRUE(vd::numeric::finite_t(std::numeric_limits<unsigned int>::max()));
+    EXPECT_TRUE(vd::numeric::finite_t(std::numeric_limits<unsigned int>::lowest()));
 }
 
 TEST(NumericBoundsTest, FloatsAndDoublesInfiniteFails)
 {
-    auto rule = vd::numeric::finite<float>();
+    EXPECT_FALSE(vd::numeric::finite_t(std::numeric_limits<float>::infinity()));
+    EXPECT_FALSE(vd::numeric::finite_t(-std::numeric_limits<float>::infinity()));
 
-    EXPECT_FALSE(rule(std::numeric_limits<float>::infinity()));
-
-    auto rule_double = vd::numeric::finite<double>();
-
-    EXPECT_FALSE(rule(std::numeric_limits<double>::infinity()));
+    EXPECT_FALSE(vd::numeric::finite_t(std::numeric_limits<double>::infinity()));
+    EXPECT_FALSE(vd::numeric::finite_t(-std::numeric_limits<double>::infinity()));
 }
 
 TEST(NumericBoundsTest, FloatsAndDoublesNaNFails)
 {
-    auto rule = vd::numeric::finite<float>();
-
-    EXPECT_FALSE(rule(std::numeric_limits<float>::quiet_NaN()));
-
-    auto rule_double = vd::numeric::finite<double>();
-
-    EXPECT_FALSE(rule_double(std::numeric_limits<double>::quiet_NaN()));
+    EXPECT_FALSE(vd::numeric::finite_t(std::numeric_limits<float>::quiet_NaN()));
+    EXPECT_FALSE(vd::numeric::finite_t(std::numeric_limits<double>::quiet_NaN()));
 }
 
 TEST(NumericBoundsTest, FiniteFloatsPassesOnBoundaries)
 {
-    auto rule = vd::numeric::finite<double>();
+    EXPECT_TRUE(vd::numeric::finite_t(std::numeric_limits<double>::denorm_min()));
+    EXPECT_TRUE(vd::numeric::finite_t(std::numeric_limits<double>::max()));
+    EXPECT_TRUE(vd::numeric::finite_t(std::numeric_limits<double>::lowest()));
 
-    EXPECT_TRUE(rule(std::numeric_limits<double>::denorm_min()));
-    EXPECT_TRUE(rule(std::numeric_limits<double>::max()));
-
-    auto rule_float = vd::numeric::finite<float>();
-
-    EXPECT_TRUE(rule(std::numeric_limits<float>::denorm_min()));
-    EXPECT_TRUE(rule(std::numeric_limits<float>::max()));
+    EXPECT_TRUE(vd::numeric::finite_t(std::numeric_limits<float>::denorm_min()));
+    EXPECT_TRUE(vd::numeric::finite_t(std::numeric_limits<float>::max()));
+    EXPECT_TRUE(vd::numeric::finite_t(std::numeric_limits<float>::lowest()));
 }
 
+TEST(NumericBoundsTest, FiniteGuardIsAnEmptyInlineObject)
+{
+    // The API is an object, not a factory: vd::numeric::finite_t is a single
+    // stateless instance, and finite_guard is no longer a class template.
+    static_assert(std::is_same_v<decltype(vd::numeric::finite_t), const vd::numeric::finite_guard>);
+    static_assert(std::is_empty_v<vd::numeric::finite_guard>);
+    static_assert(std::is_trivially_copyable_v<vd::numeric::finite_guard>);
+    SUCCEED();
+}
 // ---------------------------------------------------------------------------
 // numeric_bounds — float/double exclusive immediate neighbor
 // The bound is set to the representable value adjacent to the endpoint, so the
@@ -1059,4 +1060,212 @@ TEST(MemoryModels, NotNullAcceptsNonNullUniquePointerViaField)
         vd::field(&TypeWithUniquePtrFieldWithGetter::get_ptr, vd::memory::not_null));
     TypeWithUniquePtrFieldWithGetter instance { std::make_unique<int>(42) };
     EXPECT_TRUE(model.check(instance));
+}
+
+// ---------------------------------------------------------------------------
+// NumericFiniteBasicModelTest — vd::numeric::finite_t inside basic_model<T>
+//
+// vd::numeric::finite_t is a single inline constexpr finite_guard, and the
+// guard templates its operator() rather than the class. As a *checker* for
+// vd::member / vd::field that is transparent — the member's type drives the
+// deduction. As a *top-level* basic_model rule it must be wrapped in an
+// explicitly typed vd::rule<T>, for two independent reasons: vd::rule's
+// converting constructor is explicit, and the guard carries no value type of
+// its own for anyone to deduce.
+// ---------------------------------------------------------------------------
+
+TEST(NumericFiniteBasicModelTest, FiniteSatisfiesValueChecker)
+{
+    using guard_t = vd::numeric::finite_guard;
+    static_assert(vd::value_checker<guard_t, double>);
+    static_assert(vd::value_checker<guard_t, const double&>);
+    static_assert(std::is_same_v<std::invoke_result_t<guard_t, const double&>, vd::result>);
+    SUCCEED();
+}
+
+TEST(NumericFiniteBasicModelTest, GuardIsTypeAgnosticButArithmeticOnly)
+{
+    using guard_t = vd::numeric::finite_guard;
+
+    static_assert(vd::value_checker<guard_t, double>);
+    static_assert(vd::value_checker<guard_t, float>);
+    static_assert(vd::value_checker<guard_t, std::int32_t>);
+
+    // The numeric_compatible constraint moved from the class onto operator(),
+    // so the guard is simply not a checker for non-arithmetic values — the
+    // concept subsumes it instead of the instantiation hard-erroring.
+    static_assert(!vd::value_checker<guard_t, std::string>);
+    SUCCEED();
+}
+
+TEST(NumericFiniteBasicModelTest, MemberCheckerAcceptsFiniteValue)
+{
+    auto model = vd::basic_model<Point> {}.with(vd::member(&Point::x, vd::numeric::finite_t));
+    EXPECT_TRUE(model.check(Point { 1.5, 0.0 }));
+}
+
+TEST(NumericFiniteBasicModelTest, MemberCheckerRejectsInfinity)
+{
+    auto model = vd::basic_model<Point> {}.with(vd::member(&Point::x, vd::numeric::finite_t));
+    EXPECT_FALSE(model.check(Point { std::numeric_limits<double>::infinity(), 0.0 }));
+    EXPECT_FALSE(model.check(Point { -std::numeric_limits<double>::infinity(), 0.0 }));
+}
+
+TEST(NumericFiniteBasicModelTest, MemberCheckerRejectsNaN)
+{
+    auto model = vd::basic_model<Point> {}.with(vd::member(&Point::x, vd::numeric::finite_t));
+    EXPECT_FALSE(model.check(Point { std::numeric_limits<double>::quiet_NaN(), 0.0 }));
+}
+
+TEST(NumericFiniteBasicModelTest, MemberCheckerFailurePropagatesMemberName)
+{
+    auto model = vd::basic_model<Point> {}.with(vd::member("x", &Point::x, vd::numeric::finite_t));
+    vd::result res = model.check(Point { std::numeric_limits<double>::quiet_NaN(), 0.0 });
+
+    ASSERT_FALSE(res.is_valid);
+    ASSERT_EQ(res.failed_rules.size(), 1u);
+    EXPECT_NE(res.failed_rules[0].find("x"), std::string::npos);
+    EXPECT_NE(res.failed_rules[0].find("not finite"), std::string::npos);
+}
+
+TEST(NumericFiniteBasicModelTest, FieldCheckerViaGetter)
+{
+    auto model = vd::basic_model<Point> {}.with(vd::field("get_y", &Point::get_y, vd::numeric::finite_t));
+
+    EXPECT_TRUE(model.check(Point { 0.0, 2.0 }));
+    EXPECT_FALSE(model.check(Point { 0.0, std::numeric_limits<double>::infinity() }));
+}
+
+TEST(NumericFiniteBasicModelTest, TopLevelRuleViaExplicitRuleWrap)
+{
+    auto model = vd::basic_model<double> {}.with(vd::rule<double>(vd::numeric::finite_t));
+
+    EXPECT_TRUE(model.check(1.0));
+    EXPECT_FALSE(model.check(std::numeric_limits<double>::quiet_NaN()));
+}
+
+TEST(NumericFiniteBasicModelTest, ExplicitWrapIsWhatFixesTheValueType)
+{
+    // vd::predicate is not an option here: it deduces T via first_arg_of, which
+    // needs &Fn::operator() to name one function. A templated operator() names
+    // an overload set, so the guard has to be wrapped at an explicit type — and
+    // because it is stateless, the very same object can be pinned at several.
+    auto as_double = vd::basic_model<double> {}.with(vd::rule<double>(vd::numeric::finite_t));
+    auto as_float = vd::basic_model<float> {}.with(vd::rule<float>(vd::numeric::finite_t));
+    auto as_int = vd::basic_model<std::int32_t> {}.with(vd::rule<std::int32_t>(vd::numeric::finite_t));
+
+    EXPECT_TRUE(as_double.check(1.0));
+    EXPECT_FALSE(as_double.check(std::numeric_limits<double>::infinity()));
+
+    EXPECT_TRUE(as_float.check(1.0f));
+    EXPECT_FALSE(as_float.check(std::numeric_limits<float>::quiet_NaN()));
+
+    EXPECT_TRUE(as_int.check(std::numeric_limits<std::int32_t>::max()));
+}
+
+TEST(NumericFiniteBasicModelTest, InitializerListConstructionWithWrappedGuard)
+{
+    vd::basic_model<double> model { vd::rule<double>(vd::numeric::finite_t) };
+
+    EXPECT_TRUE(model.check(0.0));
+    EXPECT_FALSE(model.check(std::numeric_limits<double>::quiet_NaN()));
+}
+
+TEST(NumericFiniteBasicModelTest, NaNFailsBothFiniteAndBoundsRules)
+{
+    // Every comparison against NaN is false, so a bounds rule rejects it too —
+    // the aggregating check must therefore collect both failures.
+    auto model = vd::basic_model<Point> {}
+                     .with(vd::member("x", &Point::x, vd::numeric::finite_t))
+                     .with(vd::member("x", &Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    vd::result res = model.check(Point { std::numeric_limits<double>::quiet_NaN(), 0.0 });
+
+    EXPECT_FALSE(res.is_valid);
+    EXPECT_EQ(res.failed_rules.size(), 2u);
+}
+
+TEST(NumericFiniteBasicModelTest, ShortCheckStopsAtFirstFailure)
+{
+    auto model = vd::basic_model<Point> {}
+                     .with(vd::member("x", &Point::x, vd::numeric::finite_t))
+                     .with(vd::member("y", &Point::y, vd::numeric::finite_t));
+
+    const Point bad { std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity() };
+
+    // both overloads must short-circuit alike — the reference one delegates to
+    // the pointer one, so a regression there would silently turn it into check()
+    for(vd::result res : { model.short_check(bad), model.short_check(&bad) }) {
+        EXPECT_FALSE(res.is_valid);
+        EXPECT_EQ(res.failed_rules.size(), 1u);
+        EXPECT_NE(res.failed_rules[0].find("x"), std::string::npos);
+    }
+}
+
+TEST(NumericFiniteBasicModelTest, FiniteBoundaryValuesPassThroughModel)
+{
+    auto model = vd::basic_model<Point> {}.with(vd::member(&Point::x, vd::numeric::finite_t));
+
+    EXPECT_TRUE(model.check(Point { std::numeric_limits<double>::max(), 0.0 }));
+    EXPECT_TRUE(model.check(Point { std::numeric_limits<double>::lowest(), 0.0 }));
+    EXPECT_TRUE(model.check(Point { std::numeric_limits<double>::denorm_min(), 0.0 }));
+}
+
+TEST(NumericFiniteBasicModelTest, IntegralMemberIsAlwaysFinite)
+{
+    auto model = vd::basic_model<NamedValue> {}.with(vd::member(&NamedValue::value, vd::numeric::finite_t));
+
+    EXPECT_TRUE(model.check(NamedValue { "a", 0 }));
+    EXPECT_TRUE(model.check(NamedValue { "a", std::numeric_limits<int>::max() }));
+    EXPECT_TRUE(model.check(NamedValue { "a", std::numeric_limits<int>::lowest() }));
+}
+
+TEST(NumericFiniteBasicModelTest, DieIfFailedThrowsOnNaN)
+{
+    auto model = vd::basic_model<Point> {}.with(vd::member(&Point::x, vd::numeric::finite_t));
+
+    EXPECT_NO_THROW(model.die_if_failed(Point { 1.0, 0.0 }));
+    EXPECT_THROW(model.die_if_failed(Point { std::numeric_limits<double>::quiet_NaN(), 0.0 }), vd::validation_exception);
+}
+
+TEST(NumericFiniteBasicModelTest, BoundModelChecksFiniteness)
+{
+    auto model = vd::basic_model<Point> {}.with(vd::member(&Point::x, vd::numeric::finite_t));
+
+    const Point good { 1.0, 0.0 };
+    const Point bad { std::numeric_limits<double>::infinity(), 0.0 };
+
+    EXPECT_TRUE(model.bind(good).check());
+    EXPECT_FALSE(model.bind(bad).check());
+}
+
+TEST(NumericFiniteBasicModelTest, ValidateManyRejectsBatchWithNonFiniteMember)
+{
+    auto model = vd::basic_model<Point> {}.with(vd::member(&Point::x, vd::numeric::finite_t));
+
+    EXPECT_TRUE(vd::validate_many(model, Point { 1.0, 0.0 }, Point { 2.0, 0.0 }));
+    EXPECT_FALSE(vd::validate_many(model, Point { 1.0, 0.0 }, Point { std::numeric_limits<double>::quiet_NaN(), 0.0 }));
+}
+
+TEST(NumericFiniteBasicModelTest, GuardIsCopyableAndReusableAcrossModels)
+{
+    // The shared inline constexpr object is what gets copied into every rule —
+    // being empty and stateless, the copies cannot interfere with each other.
+    auto first = vd::basic_model<Point> {}.with(vd::member(&Point::x, vd::numeric::finite_t));
+    auto second = vd::basic_model<Point> {}.with(vd::member(&Point::y, vd::numeric::finite_t));
+
+    EXPECT_FALSE(first.check(Point { std::numeric_limits<double>::quiet_NaN(), 0.0 }));
+    EXPECT_TRUE(second.check(Point { std::numeric_limits<double>::quiet_NaN(), 0.0 }));
+}
+
+TEST(NumericFiniteBasicModelTest, ModelCompositionWithFiniteAndBoundsAcceptsValidPoint)
+{
+    auto model = vd::basic_model<Point> {}
+                     .with(vd::member("x", &Point::x, vd::numeric::finite_t))
+                     .with(vd::member("y", &Point::y, vd::numeric::finite_t))
+                     .with(vd::member("x", &Point::x, vd::double_bounds::inclusive(-10.0, 10.0)));
+
+    EXPECT_TRUE(model.check(Point { 5.0, 1000.0 }));
+    EXPECT_FALSE(model.check(Point { 5.0, std::numeric_limits<double>::infinity() }));
+    EXPECT_FALSE(model.check(Point { 50.0, 1.0 }));
 }

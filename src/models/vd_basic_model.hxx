@@ -43,7 +43,7 @@ struct basic_model {
 
     vd::result short_check(const_reference_type object) const
     {
-        return check(std::addressof(object));
+        return short_check(std::addressof(object));
     }
 
     void die_if_failed(const_pointer_type object) const

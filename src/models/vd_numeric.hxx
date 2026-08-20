@@ -126,10 +126,10 @@ using unsigned_long_model = basic_model<std::uint64_t>;
 
 namespace vd::numeric
 {
-template<numeric_compatible T>
-vd::rule<T> finite()
-{
-    return vd::rule<T>([](const T& value) -> vd::result {
+struct finite_guard final {
+    template<numeric_compatible T>
+    vd::result operator()(const T& value) const
+    {
         auto is_finite = std::isfinite(value);
 
         if(is_finite) {
@@ -137,8 +137,11 @@ vd::rule<T> finite()
         }
 
         return vd::result::failed({ std::format("Value is not finite: {}", value) });
-    });
-}
+    }
+};
+
+inline constexpr auto finite_t = finite_guard {};
+
 } // namespace vd::numeric
 
 #endif // VD_NUMERIC_HXX

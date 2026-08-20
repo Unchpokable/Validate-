@@ -31,6 +31,7 @@ vd::result r = user_model.check(u);  // r.is_valid == true
 - **Numeric bounds** — inclusive/exclusive ranges, one-sided bounds, and outside-range checks for all arithmetic types
 - **String checkers** — compile-time patterns via [CTRE](https://github.com/hanickadot/compile-time-regular-expressions), runtime `std::regex`, length checks (`min_length`, `max_length`, `length_in_between`), and common presets (`email_like`, `uri_like`, `non_empty`, …); most checkers work with any `std::basic_string_view<CharT>` / `std::basic_string<CharT>`, not just `std::string`
 - **Modern assertions** — `vd::require` with `std::format` messages, source-location diagnostics, optional exception throwing, and custom callbacks
+- **Monadic checkers** — `vd::monadic::not_empty` for `std::optional<T>` and `vd::monadic::as_expected` for `std::expected<T, E>` (C++23, feature-test gated)
 - **Non-null pointer contract** — `vd::not_null<T*>` enforces that a raw pointer parameter is never `nullptr`, checked at compile time or runtime; `vd::memory::not_null` is the model-rule counterpart for pointer-like fields
 - **Qt extension** — `QString` / `QStringView` checkers (including length checks) and `Q_PROPERTY` validation for Qt 5/6 projects
 
@@ -220,8 +221,10 @@ Exclusive bounds use the library's own `vd::ct_nextafter<T>` — a `constexpr` i
 Check for finite values (rejects `NaN` and `inf`):
 
 ```cpp
-vd::numeric::finite<double>()
+vd::numeric::finite_t
 ```
+
+`finite_t` is a single `inline constexpr` object, not a factory call — `finite_guard` templates its `operator()` rather than the class, so the same object works for every arithmetic type and can be applied to `double`, `float` and `int` members of one model. It is empty, so `static_model` stores it with no indirection at all. As a top-level `basic_model` rule it must be wrapped explicitly (`vd::rule<double>(vd::numeric::finite_t)`) — `vd::predicate` cannot deduce a value type from a templated `operator()`.
 
 Available aliases: `byte_bounds`, `short_bounds`, `int_bounds`, `long_bounds`, `float_bounds`, `double_bounds`, and their unsigned / signed variants.
 
@@ -242,6 +245,19 @@ vd::string_rules::length_in_between(3, 20)        // 3 <= length <= 20
 All checkers accept `std::string_view` and return `vd::result`. `std::string` fields work without explicit conversion.
 
 `non_empty`, `empty`, `empty_or_whitespace`, and the three length checkers additionally accept any `std::basic_string_view<CharT>` / `std::basic_string<CharT>` (`wchar_t`, `char8_t`, `char16_t`, `char32_t`), so they work with `std::wstring`, `std::u16string`, etc. `email_like`, `uri_like`, and `regex` remain `std::string_view`-only. Length checkers count **code units**, not user-perceived characters — see [docs/string-rules.md](docs/string-rules.md) for the distinction. `min_length`/`max_length`/`length_in_between` throw `vd::assertion_exception` if constructed with invalid bounds (e.g. `max_length(0)` or `length_in_between(10, 5)`).
+
+### Monadic rules
+
+Checkers for the standard wrapper types — they ask whether the wrapper carries a value, and nothing more:
+
+```cpp
+vd::monadic::not_empty<std::string>()                      // std::optional<std::string> is engaged
+vd::monadic::as_expected<std::int32_t, std::string>()      // std::expected<int32_t, string> holds a value
+```
+
+The template parameter is the *payload* type, so `not_empty<std::string>()` checks a `std::optional<std::string>` field. The check is `has_value()`, not truthiness — an engaged `optional<int>{0}` or `optional<std::string>{""}` passes, which keeps "present" and "valid" as separate, independently reportable rules.
+
+`as_expected` requires C++23 and is declared behind `#if defined(__cpp_lib_expected)`; on a toolchain without `<expected>` the symbol simply does not exist. `std::expected<void, E>` is supported. See [docs/monadic.md](docs/monadic.md) for composing these with a checker for the payload.
 
 ### `vd::require`
 
@@ -331,7 +347,7 @@ namespace my_rules {
 
 ## Further reading
 
-The [`docs/`](docs/) directory covers the internals — design rationale, TMP/concept choices, and module-by-module reference (in Russian): [overview](docs/overview.md), [models](docs/models.md), [static-model](docs/static-model.md), [numeric](docs/numeric.md), [string-rules](docs/string-rules.md), [assert](docs/assert.md), [not_null](docs/not_null.md), [qt extensions](docs/qt%20extensions.md), [extending](docs/extending.md).
+The [`docs/`](docs/) directory covers the internals — design rationale, TMP/concept choices, and module-by-module reference: [overview](docs/overview.md), [models](docs/models.md), [static-model](docs/static-model.md), [numeric](docs/numeric.md), [string-rules](docs/string-rules.md), [monadic](docs/monadic.md), [assert](docs/assert.md), [not_null](docs/not_null.md), [qt extensions](docs/qt%20extensions.md), [extending](docs/extending.md).
 
 ## License
 

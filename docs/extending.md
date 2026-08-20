@@ -46,6 +46,36 @@ auto model = vd::basic_model<Item>()
     .with(vd::member(&Item::label,    min_length{3}));
 ```
 
+### Option 2b: a stateless checker templated on `operator()`
+
+When the check is the same for a whole family of value types, template `operator()` rather than the struct, and expose one shared object. `vd::numeric::finite_guard` is the library's own example of this shape:
+
+```cpp
+struct finite_guard final {
+    template<numeric_compatible T>
+    vd::result operator()(const T& value) const;
+};
+
+inline constexpr auto finite_t = finite_guard{};
+```
+
+Two things this buys you: a constraint on `operator()` makes `value_checker` fail cleanly for unsuitable types instead of hard-erroring inside an instantiation, and an empty checker costs `static_model` no storage at all.
+
+One trap comes with it: **`vd::predicate` cannot deduce a value type from such a checker.** It goes through `detail::first_arg_of`, defined as `first_arg_of<decltype(&Fn::operator())>`, and a templated `operator()` names an overload set whose address cannot be taken. The resulting error is hard and outside the immediate context, so it is not even detectable with `requires`. Wrap explicitly instead:
+
+```cpp
+vd::basic_model<double>{}.with(vd::rule<double>(vd::numeric::finite_t));   // ok
+vd::basic_model<double>{}.with(vd::predicate(vd::numeric::finite_t));      // does not compile
+```
+
+`static_model` is unaffected — `static_rule_for<Rule, T>` already knows `T`, so nothing has to be deduced from the checker:
+
+```cpp
+vd::make_static_model<double>().with(vd::numeric::finite_t);               // ok
+```
+
+If your checker only ever handles one value type, prefer a non-generic `operator()` (Option 2) or a factory returning a plain lambda (as `vd::monadic::not_empty` does) — both keep `vd::predicate` working.
+
 ### Option 3: `string_match<Matcher>` for stateless string checkers
 
 When the matcher is a stateless function `bool(std::string_view)` and `mode::include/exclude` support is needed:
@@ -77,12 +107,13 @@ inline auto hex_color() {
 
 ## Adding a new checker module
 
-Following the pattern of `vd_numeric.hxx` and `vd_string_rules.hxx`:
+Following the pattern of `vd_numeric.hxx`, `vd_string_rules.hxx` and `vd_monadic_rules.hxx`:
 
 1. Create `src/models/vd_<your_module>.hxx`
 2. Add `#include "models/vd_<your_module>.hxx"` to `src/vd_models.hxx`
 3. Define checker types in namespace `vd` or `vd::<your_namespace>`
-4. All factory functions in the `.hxx` must be `inline`
+4. All factory functions in the `.hxx` must be `inline` (a `constexpr` function factory, or an `inline constexpr` object for a stateless checker, works too)
+5. If the module depends on a library feature that is not universally available, gate it on the feature-test macro rather than on the language standard — `vd_monadic_rules.hxx` includes `<version>` and wraps `as_expected` in `#if defined(__cpp_lib_expected)`, so the rest of the module still compiles on a C++20 toolchain
 
 Template for a new module:
 

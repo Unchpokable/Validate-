@@ -68,7 +68,8 @@ src/
 │   ├── vd_basic_model.hxx     # basic_model<T>, basic_bound_model<T>, validate_many()
 │   ├── vd_static_model.hxx    # static_model<T, Rules...> — compile-time model (see static-model.md)
 │   ├── vd_memory.hxx          # vd::memory::not_null — ready-made checker for pointer-like fields
-│   ├── vd_numeric.hxx         # numeric_bounds<T> + type aliases
+│   ├── vd_monadic_rules.hxx   # vd::monadic::not_empty / as_expected — optional and expected checkers
+│   ├── vd_numeric.hxx         # numeric_bounds<T>, finite_guard + type aliases
 │   ├── vd_string_rules.hxx    # string_match<>, regex_checker, length rules, factory functions
 │   └── vd_string_rules.cxx    # Implementation of regex_checker::operator() and regex() (std::regex — non-template)
 │
@@ -91,9 +92,10 @@ ext/qt/
 
 tests/
 ├── test_assert.cxx            # Tests for vd::require / vd::ct_require
-├── test_models.cxx            # Tests for rule, basic_model, numeric_bounds
+├── test_models.cxx            # Tests for rule, basic_model, numeric_bounds, finite_guard
 ├── test_static_model.cxx      # Tests for static_model<T, Rules...>
 ├── test_string_rules.cxx      # Tests for string_rules, including CharT generalization and length rules
+├── test_monadic_rules.cxx     # Tests for vd::monadic against basic_model and static_model
 ├── test_not_null.cxx          # Tests for vd::not_null<T*>
 ├── test_integration.cxx       # Integration tests for the whole library
 ├── test_qt_property.cxx       # Tests for qt_property()
@@ -108,6 +110,7 @@ docs/
 ├── not_null.md                # not_null<T*> and vd::memory::not_null
 ├── numeric.md                 # numeric_bounds
 ├── string-rules.md            # string_rules
+├── monadic.md                 # vd::monadic — optional / expected checkers
 ├── extending.md                # How to add new checkers and modules
 └── qt extensions.md           # Qt extensions (QString, QProperty)
 ```
@@ -125,8 +128,10 @@ docs/
 | `value_checker` | Concept: callable `V -> bool` (or `V -> vd::result`, since it converts to `bool`). Used as the second argument to the `field`/`member` factories — validates a **field's value**. |
 | `static_rule_for<Rule, T>` | Concept for `static_model::with()`: callable `const T& -> bool \| vd::result`. Structurally similar to `value_checker`, but validates the **whole object**, not a field's value. |
 | `numeric_bounds<T>` | Implements `value_checker` for numeric types. |
+| `finite_guard` | Implements `value_checker` for numeric types by rejecting `NaN`/`inf`. Templates `operator()`, not the class, so the single `vd::numeric::finite_t` object serves every arithmetic type. |
 | `string_match<Matcher>` | Implements `value_checker` for strings via an NTTP matcher; generalized over `basic_string_view<CharT>`/`basic_string<CharT>`. |
 | `regex_checker` | Implements `value_checker` for strings via `std::regex` with a runtime pattern (`std::string_view` only). |
+| `vd::monadic::not_empty<T>` / `as_expected<T, E>` | Factories returning `value_checker`s for `std::optional<T>` / `std::expected<T, E>`. Check engagement only — not the payload. `as_expected` requires C++23. See [monadic.md](monadic.md). |
 
 ## How it all connects
 
