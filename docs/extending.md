@@ -48,7 +48,7 @@ auto model = vd::basic_model<Item>()
 
 ### Option 2b: a stateless checker templated on `operator()`
 
-When the check is the same for a whole family of value types, template `operator()` rather than the struct, and expose one shared object. `vd::numeric::finite_guard` is the library's own example of this shape:
+When the check is the same for a whole family of value types, template `operator()` rather than the struct, and expose one shared object. `vd::numeric::finite_guard` and both `vd::monadic` rules are the library's own examples of this shape:
 
 ```cpp
 struct finite_guard final {
@@ -57,24 +57,46 @@ struct finite_guard final {
 };
 
 inline constexpr auto finite_t = finite_guard{};
+
+struct not_empty_t final {
+    template<typename T>
+    vd::result operator()(const std::optional<T>& opt) const;
+};
+
+inline constexpr not_empty_t not_empty;
 ```
 
-Two things this buys you: a constraint on `operator()` makes `value_checker` fail cleanly for unsuitable types instead of hard-erroring inside an instantiation, and an empty checker costs `static_model` no storage at all.
+Two things this buys you: unsuitable types make `value_checker` fail cleanly instead of hard-erroring inside an instantiation, and an empty checker costs `static_model` no storage at all.
+
+The clean failure comes from one of two mechanisms, and you want exactly one of them:
+
+* a **constraint** on the template parameter, as `finite_guard` does with `numeric_compatible`;
+* a **deduced pattern** in the parameter type, as `not_empty_t` does with `const std::optional<T>&` — every non-optional argument is then a deduction failure in the immediate context.
+
+`operator()` must be **`const`-qualified**. The shared object is `inline constexpr` and therefore const, so a non-const `operator()` makes it uncallable — both directly and from inside the const lambdas `vd::member` / `vd::field` build around it.
 
 One trap comes with it: **`vd::predicate` cannot deduce a value type from such a checker.** It goes through `detail::first_arg_of`, defined as `first_arg_of<decltype(&Fn::operator())>`, and a templated `operator()` names an overload set whose address cannot be taken. The resulting error is hard and outside the immediate context, so it is not even detectable with `requires`. Wrap explicitly instead:
 
 ```cpp
 vd::basic_model<double>{}.with(vd::rule<double>(vd::numeric::finite_t));   // ok
 vd::basic_model<double>{}.with(vd::predicate(vd::numeric::finite_t));      // does not compile
+
+vd::basic_model<std::optional<int>>{}
+    .with(vd::rule<std::optional<int>>(vd::monadic::not_empty));           // ok
+vd::basic_model<std::optional<int>>{}
+    .with(vd::predicate(vd::monadic::not_empty));                          // does not compile
 ```
 
 `static_model` is unaffected — `static_rule_for<Rule, T>` already knows `T`, so nothing has to be deduced from the checker:
 
 ```cpp
 vd::make_static_model<double>().with(vd::numeric::finite_t);               // ok
+vd::make_static_model<std::optional<int>>().with(vd::monadic::not_empty);  // ok
 ```
 
-If your checker only ever handles one value type, prefer a non-generic `operator()` (Option 2) or a factory returning a plain lambda (as `vd::monadic::not_empty` does) — both keep `vd::predicate` working.
+Nor are `vd::member` / `vd::field`, which take `T` from the member pointer — so the common case, a checker attached to a field, never runs into this at all.
+
+If your checker only ever handles one value type, prefer a non-generic `operator()` (Option 2) — it keeps `vd::predicate` working. Reach for this option when the alternative would be making callers spell the type out at every call site, which is the trade `vd::monadic` deliberately makes.
 
 ### Option 3: `string_match<Matcher>` for stateless string checkers
 

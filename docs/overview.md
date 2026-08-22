@@ -131,7 +131,7 @@ docs/
 | `finite_guard` | Implements `value_checker` for numeric types by rejecting `NaN`/`inf`. Templates `operator()`, not the class, so the single `vd::numeric::finite_t` object serves every arithmetic type. |
 | `string_match<Matcher>` | Implements `value_checker` for strings via an NTTP matcher; generalized over `basic_string_view<CharT>`/`basic_string<CharT>`. |
 | `regex_checker` | Implements `value_checker` for strings via `std::regex` with a runtime pattern (`std::string_view` only). |
-| `vd::monadic::not_empty<T>` / `as_expected<T, E>` | Factories returning `value_checker`s for `std::optional<T>` / `std::expected<T, E>`. Check engagement only — not the payload. `as_expected` requires C++23. See [monadic.md](monadic.md). |
+| `not_empty_t` / `as_expected_t` | Implement `value_checker` for `std::optional<T>` / `std::expected<T, E>`. Like `finite_guard`, they template `operator()` rather than the class, so the single `vd::monadic::not_empty` / `vd::monadic::as_expected` object deduces the wrapped types and serves every specialization. Check engagement only — not the payload. `as_expected` requires C++23. See [monadic.md](monadic.md). |
 
 ## How it all connects
 

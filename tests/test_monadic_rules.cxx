@@ -19,7 +19,7 @@
 //
 // vd::monadic rules operate on the monadic wrapper itself (std::optional /
 // std::expected), so the fixtures deliberately expose those wrappers both as
-// plain members and through getters — the two rule-factory entry points.
+// plain members and through getters — the two checker entry points.
 // ---------------------------------------------------------------------------
 
 struct UserSettings {
@@ -40,32 +40,27 @@ struct Telemetry {
 // ---------------------------------------------------------------------------
 // MonadicNotEmptyTest — the rule in isolation
 //
-// not_empty checks *engagement*, never the truthiness of the contained value.
-// An engaged optional holding 0, false or "" must therefore still pass.
+// not_empty is a single shared `inline constexpr` object with a templated
+// operator(); the payload type is deduced from the argument, so the same object
+// serves every std::optional<T>.
+//
+// It checks *engagement*, never the truthiness of the contained value. An
+// engaged optional holding 0, false or "" must therefore still pass.
 // ---------------------------------------------------------------------------
 
 TEST(MonadicNotEmptyTest, EngagedOptionalPasses)
 {
-    auto rule = vd::monadic::not_empty<std::int32_t>();
-    EXPECT_TRUE(rule(std::optional<std::int32_t> { 42 }));
+    EXPECT_TRUE(vd::monadic::not_empty(std::optional<std::int32_t> { 42 }));
 }
 
 TEST(MonadicNotEmptyTest, DisengagedOptionalFails)
 {
-    auto rule = vd::monadic::not_empty<std::int32_t>();
-    EXPECT_FALSE(rule(std::optional<std::int32_t> {}));
-}
-
-TEST(MonadicNotEmptyTest, NulloptFails)
-{
-    auto rule = vd::monadic::not_empty<std::string>();
-    EXPECT_FALSE(rule(std::nullopt));
+    EXPECT_FALSE(vd::monadic::not_empty(std::optional<std::int32_t> {}));
 }
 
 TEST(MonadicNotEmptyTest, FailureCarriesDescription)
 {
-    auto rule = vd::monadic::not_empty<std::int32_t>();
-    vd::result res = rule(std::optional<std::int32_t> {});
+    vd::result res = vd::monadic::not_empty(std::optional<std::int32_t> {});
 
     ASSERT_FALSE(res.is_valid);
     ASSERT_EQ(res.failed_rules.size(), 1u);
@@ -74,41 +69,52 @@ TEST(MonadicNotEmptyTest, FailureCarriesDescription)
 
 TEST(MonadicNotEmptyTest, SuccessCarriesNoDescription)
 {
-    auto rule = vd::monadic::not_empty<std::int32_t>();
-    EXPECT_TRUE(rule(std::optional<std::int32_t> { 0 }).failed_rules.empty());
+    EXPECT_TRUE(vd::monadic::not_empty(std::optional<std::int32_t> { 0 }).failed_rules.empty());
 }
 
 // Engagement, not truthiness: a zero / false / empty-string payload is present.
 TEST(MonadicNotEmptyTest, EngagedWithZeroPasses)
 {
-    EXPECT_TRUE(vd::monadic::not_empty<std::int32_t>()(std::optional<std::int32_t> { 0 }));
+    EXPECT_TRUE(vd::monadic::not_empty(std::optional<std::int32_t> { 0 }));
 }
 
 TEST(MonadicNotEmptyTest, EngagedWithFalsePasses)
 {
-    EXPECT_TRUE(vd::monadic::not_empty<bool>()(std::optional<bool> { false }));
+    EXPECT_TRUE(vd::monadic::not_empty(std::optional<bool> { false }));
 }
 
 TEST(MonadicNotEmptyTest, EngagedWithEmptyStringPasses)
 {
-    EXPECT_TRUE(vd::monadic::not_empty<std::string>()(std::optional<std::string> { std::string {} }));
+    EXPECT_TRUE(vd::monadic::not_empty(std::optional<std::string> { std::string {} }));
 }
 
 TEST(MonadicNotEmptyTest, WorksWithNonTrivialValueType)
 {
-    auto rule = vd::monadic::not_empty<std::vector<std::int32_t>>();
-    EXPECT_TRUE(rule(std::optional<std::vector<std::int32_t>> { std::vector<std::int32_t> { 1, 2, 3 } }));
-    EXPECT_FALSE(rule(std::optional<std::vector<std::int32_t>> {}));
+    using vec_t = std::vector<std::int32_t>;
+
+    EXPECT_TRUE(vd::monadic::not_empty(std::optional<vec_t> { vec_t { 1, 2, 3 } }));
+    EXPECT_FALSE(vd::monadic::not_empty(std::optional<vec_t> {}));
 }
 
-// The rule is stateless, so a single instance is reusable and freely copyable.
+// The point of the templated operator(): one object, every payload type, no
+// template argument at the call site.
+TEST(MonadicNotEmptyTest, OneObjectServesEveryPayloadType)
+{
+    EXPECT_TRUE(vd::monadic::not_empty(std::optional<std::int32_t> { 1 }));
+    EXPECT_TRUE(vd::monadic::not_empty(std::optional<std::string> { std::string { "a" } }));
+    EXPECT_TRUE(vd::monadic::not_empty(std::optional<double> { 0.5 }));
+    EXPECT_FALSE(vd::monadic::not_empty(std::optional<std::int32_t> {}));
+    EXPECT_FALSE(vd::monadic::not_empty(std::optional<std::string> {}));
+    EXPECT_FALSE(vd::monadic::not_empty(std::optional<double> {}));
+}
+
+// The rule is stateless, so the shared object is reusable and freely copyable.
 TEST(MonadicNotEmptyTest, RuleInstanceIsReusable)
 {
-    auto rule = vd::monadic::not_empty<std::int32_t>();
-    auto copy = rule;
+    auto copy = vd::monadic::not_empty;
 
-    EXPECT_TRUE(rule(std::optional<std::int32_t> { 1 }));
-    EXPECT_FALSE(rule(std::optional<std::int32_t> {}));
+    EXPECT_TRUE(vd::monadic::not_empty(std::optional<std::int32_t> { 1 }));
+    EXPECT_FALSE(vd::monadic::not_empty(std::optional<std::int32_t> {}));
     EXPECT_TRUE(copy(std::optional<std::int32_t> { 1 }));
     EXPECT_FALSE(copy(std::optional<std::int32_t> {}));
 }
@@ -122,7 +128,7 @@ TEST(MonadicNotEmptyTest, RuleInstanceIsReusable)
 
 TEST(MonadicRuleConceptTest, NotEmptySatisfiesValueChecker)
 {
-    using rule_t = decltype(vd::monadic::not_empty<std::int32_t>());
+    using rule_t = vd::monadic::not_empty_t;
     static_assert(vd::value_checker<rule_t, std::optional<std::int32_t>>);
     static_assert(vd::value_checker<rule_t, const std::optional<std::int32_t>&>);
     SUCCEED();
@@ -130,23 +136,54 @@ TEST(MonadicRuleConceptTest, NotEmptySatisfiesValueChecker)
 
 TEST(MonadicRuleConceptTest, NotEmptySatisfiesStaticRuleFor)
 {
-    using rule_t = decltype(vd::monadic::not_empty<std::int32_t>());
-    static_assert(vd::static_rule_for<rule_t, std::optional<std::int32_t>>);
+    static_assert(vd::static_rule_for<vd::monadic::not_empty_t, std::optional<std::int32_t>>);
     SUCCEED();
 }
 
 TEST(MonadicRuleConceptTest, NotEmptyReturnsResultNotBool)
 {
-    using rule_t = decltype(vd::monadic::not_empty<std::int32_t>());
+    using rule_t = vd::monadic::not_empty_t;
     static_assert(std::is_same_v<std::invoke_result_t<rule_t, const std::optional<std::int32_t>&>, vd::result>);
     SUCCEED();
 }
 
-// not_empty is constexpr-constructible, so it can be built in a constant
-// expression even though evaluating it cannot be (vd::result owns a vector).
-TEST(MonadicRuleConceptTest, NotEmptyIsConstexprConstructible)
+// The shared object is `inline constexpr`, i.e. const — operator() has to be
+// const-qualified for it to be callable at all, both directly and from inside
+// the const lambdas the rule factories build.
+TEST(MonadicRuleConceptTest, SharedObjectIsConstInvocable)
 {
-    constexpr auto rule = vd::monadic::not_empty<std::int32_t>();
+    static_assert(std::is_const_v<std::remove_reference_t<decltype(vd::monadic::not_empty)>>);
+    static_assert(vd::value_checker<const vd::monadic::not_empty_t&, std::optional<std::int32_t>>);
+    static_assert(vd::static_rule_for<const vd::monadic::not_empty_t&, std::optional<std::int32_t>>);
+    SUCCEED();
+}
+
+// Deduction is the type filter: anything that is not a std::optional fails
+// template argument deduction in the immediate context, so the concepts report
+// a clean `false` instead of hard-erroring inside an instantiation.
+TEST(MonadicRuleConceptTest, NotEmptyRejectsNonOptionalTypes)
+{
+    static_assert(!vd::value_checker<vd::monadic::not_empty_t, std::int32_t>);
+    static_assert(!vd::value_checker<vd::monadic::not_empty_t, std::string>);
+    SUCCEED();
+}
+
+// A bare std::nullopt is *not* accepted any more: T cannot be deduced from
+// std::nullopt_t. Spell the optional out — std::optional<T> {} — instead.
+TEST(MonadicRuleConceptTest, NotEmptyRejectsBareNullopt)
+{
+    static_assert(!vd::value_checker<vd::monadic::not_empty_t, std::nullopt_t>);
+    SUCCEED();
+}
+
+// The rule is an empty, constexpr-constructible type, so a copy can be made in
+// a constant expression even though evaluating it cannot be (vd::result owns a
+// vector).
+TEST(MonadicRuleConceptTest, NotEmptyIsEmptyAndConstexprConstructible)
+{
+    static_assert(std::is_empty_v<vd::monadic::not_empty_t>);
+
+    constexpr auto rule = vd::monadic::not_empty;
     EXPECT_TRUE(rule(std::optional<std::int32_t> { 1 }));
 }
 
@@ -157,26 +194,26 @@ TEST(MonadicRuleConceptTest, NotEmptyIsConstexprConstructible)
 //   * as a *checker* handed to vd::member / vd::field, where the model's T is
 //     the owning struct — the common case, needs no wrapping;
 //   * as a *top-level rule* over an optional-typed model, which must be wrapped
-//     in vd::rule<T> / vd::predicate because rule's converting constructor is
-//     explicit.
+//     in vd::rule<T> explicitly. vd::predicate cannot be used here: it deduces
+//     T via detail::first_arg_of, which takes the address of operator() —
+//     impossible for a templated one. See docs/extending.md.
 // ---------------------------------------------------------------------------
 
 TEST(MonadicNotEmptyBasicModelTest, MemberCheckerAcceptsEngagedOptional)
 {
-    auto model = vd::basic_model<UserSettings> {}.with(vd::member(&UserSettings::nickname, vd::monadic::not_empty<std::string>()));
+    auto model = vd::basic_model<UserSettings> {}.with(vd::member(&UserSettings::nickname, vd::monadic::not_empty));
     EXPECT_TRUE(model.check(UserSettings { std::string { "ada" }, 8080 }));
 }
 
 TEST(MonadicNotEmptyBasicModelTest, MemberCheckerRejectsDisengagedOptional)
 {
-    auto model = vd::basic_model<UserSettings> {}.with(vd::member(&UserSettings::nickname, vd::monadic::not_empty<std::string>()));
+    auto model = vd::basic_model<UserSettings> {}.with(vd::member(&UserSettings::nickname, vd::monadic::not_empty));
     EXPECT_FALSE(model.check(UserSettings { std::nullopt, 8080 }));
 }
 
 TEST(MonadicNotEmptyBasicModelTest, MemberCheckerFailurePropagatesMemberName)
 {
-    auto model =
-        vd::basic_model<UserSettings> {}.with(vd::member("nickname", &UserSettings::nickname, vd::monadic::not_empty<std::string>()));
+    auto model = vd::basic_model<UserSettings> {}.with(vd::member("nickname", &UserSettings::nickname, vd::monadic::not_empty));
     vd::result res = model.check(UserSettings { std::nullopt, 8080 });
 
     ASSERT_FALSE(res.is_valid);
@@ -187,44 +224,40 @@ TEST(MonadicNotEmptyBasicModelTest, MemberCheckerFailurePropagatesMemberName)
 
 TEST(MonadicNotEmptyBasicModelTest, FieldCheckerViaGetter)
 {
-    auto model =
-        vd::basic_model<UserSettings> {}.with(vd::field("nickname", &UserSettings::get_nickname, vd::monadic::not_empty<std::string>()));
+    auto model = vd::basic_model<UserSettings> {}.with(vd::field("nickname", &UserSettings::get_nickname, vd::monadic::not_empty));
 
     EXPECT_TRUE(model.check(UserSettings { std::string { "ada" }, 8080 }));
+    EXPECT_FALSE(model.check(UserSettings { std::nullopt, 8080 }));
+}
+
+// One shared object, two members of different payload type in the same model —
+// the old API needed a separate not_empty<T>() instantiation spelled out per
+// member.
+TEST(MonadicNotEmptyBasicModelTest, SameObjectChecksMembersOfDifferentPayloadTypes)
+{
+    auto model = vd::basic_model<UserSettings> {}
+                     .with(vd::member("nickname", &UserSettings::nickname, vd::monadic::not_empty))
+                     .with(vd::member("port", &UserSettings::port, vd::monadic::not_empty));
+
+    EXPECT_TRUE(model.check(UserSettings { std::string { "ada" }, 8080 }));
+    EXPECT_FALSE(model.check(UserSettings { std::string { "ada" }, std::nullopt }));
     EXPECT_FALSE(model.check(UserSettings { std::nullopt, 8080 }));
 }
 
 TEST(MonadicNotEmptyBasicModelTest, TopLevelRuleViaExplicitRuleWrap)
 {
     // basic_model stores vd::rule<T>; rule's converting constructor is explicit,
-    // so a bare rule object has to be wrapped before it can be added.
-    auto model =
-        vd::basic_model<std::optional<std::int32_t>> {}.with(vd::rule<std::optional<std::int32_t>>(vd::monadic::not_empty<std::int32_t>()));
+    // so a bare rule object has to be wrapped before it can be added. The wrap
+    // is also what pins down T, which the templated operator() cannot supply.
+    auto model = vd::basic_model<std::optional<std::int32_t>> {}.with(vd::rule<std::optional<std::int32_t>>(vd::monadic::not_empty));
 
     EXPECT_TRUE(model.check(std::optional<std::int32_t> { 7 }));
     EXPECT_FALSE(model.check(std::optional<std::int32_t> {}));
-}
-
-TEST(MonadicNotEmptyBasicModelTest, TopLevelRuleViaPredicateFactory)
-{
-    // vd::predicate deduces T from the callable's first argument — here
-    // std::optional<std::int32_t> — and performs the wrap for us.
-    auto model = vd::basic_model<std::optional<std::int32_t>> {}.with(vd::predicate(vd::monadic::not_empty<std::int32_t>()));
-
-    EXPECT_TRUE(model.check(std::optional<std::int32_t> { 7 }));
-    EXPECT_FALSE(model.check(std::optional<std::int32_t> {}));
-}
-
-TEST(MonadicNotEmptyBasicModelTest, PredicateDeducesOptionalAsModelType)
-{
-    using rule_t = decltype(vd::predicate(vd::monadic::not_empty<std::int32_t>()));
-    static_assert(std::is_same_v<rule_t, vd::rule<std::optional<std::int32_t>>>);
-    SUCCEED();
 }
 
 TEST(MonadicNotEmptyBasicModelTest, InitializerListConstructionWithWrappedRule)
 {
-    vd::basic_model<std::optional<std::string>> model { vd::rule<std::optional<std::string>>(vd::monadic::not_empty<std::string>()) };
+    vd::basic_model<std::optional<std::string>> model { vd::rule<std::optional<std::string>>(vd::monadic::not_empty) };
 
     EXPECT_TRUE(model.check(std::optional<std::string> { std::string { "x" } }));
     EXPECT_FALSE(model.check(std::optional<std::string> {}));
@@ -233,8 +266,8 @@ TEST(MonadicNotEmptyBasicModelTest, InitializerListConstructionWithWrappedRule)
 TEST(MonadicNotEmptyBasicModelTest, CheckAggregatesEveryEmptyOptional)
 {
     auto model = vd::basic_model<UserSettings> {}
-                     .with(vd::member("nickname", &UserSettings::nickname, vd::monadic::not_empty<std::string>()))
-                     .with(vd::member("port", &UserSettings::port, vd::monadic::not_empty<std::int32_t>()));
+                     .with(vd::member("nickname", &UserSettings::nickname, vd::monadic::not_empty))
+                     .with(vd::member("port", &UserSettings::port, vd::monadic::not_empty));
 
     vd::result res = model.check(UserSettings { std::nullopt, std::nullopt });
 
@@ -245,8 +278,8 @@ TEST(MonadicNotEmptyBasicModelTest, CheckAggregatesEveryEmptyOptional)
 TEST(MonadicNotEmptyBasicModelTest, ShortCheckStopsAtFirstEmptyOptional)
 {
     auto model = vd::basic_model<UserSettings> {}
-                     .with(vd::member("nickname", &UserSettings::nickname, vd::monadic::not_empty<std::string>()))
-                     .with(vd::member("port", &UserSettings::port, vd::monadic::not_empty<std::int32_t>()));
+                     .with(vd::member("nickname", &UserSettings::nickname, vd::monadic::not_empty))
+                     .with(vd::member("port", &UserSettings::port, vd::monadic::not_empty));
 
     const UserSettings bad { std::nullopt, std::nullopt };
 
@@ -259,19 +292,9 @@ TEST(MonadicNotEmptyBasicModelTest, ShortCheckStopsAtFirstEmptyOptional)
     }
 }
 
-TEST(MonadicNotEmptyBasicModelTest, MixesWithNonMonadicRules)
-{
-    auto model = vd::basic_model<UserSettings> {}
-                     .with(vd::member("nickname", &UserSettings::nickname, vd::monadic::not_empty<std::string>()))
-                     .with(vd::member("port", &UserSettings::port, vd::monadic::not_empty<std::int32_t>()));
-
-    EXPECT_TRUE(model.check(UserSettings { std::string { "ada" }, 8080 }));
-    EXPECT_FALSE(model.check(UserSettings { std::string { "ada" }, std::nullopt }));
-}
-
 TEST(MonadicNotEmptyBasicModelTest, DieIfFailedThrowsOnEmptyOptional)
 {
-    auto model = vd::basic_model<UserSettings> {}.with(vd::member(&UserSettings::nickname, vd::monadic::not_empty<std::string>()));
+    auto model = vd::basic_model<UserSettings> {}.with(vd::member(&UserSettings::nickname, vd::monadic::not_empty));
 
     EXPECT_NO_THROW(model.die_if_failed(UserSettings { std::string { "ada" }, 8080 }));
     EXPECT_THROW(model.die_if_failed(UserSettings { std::nullopt, 8080 }), vd::validation_exception);
@@ -279,7 +302,7 @@ TEST(MonadicNotEmptyBasicModelTest, DieIfFailedThrowsOnEmptyOptional)
 
 TEST(MonadicNotEmptyBasicModelTest, BoundModelChecksEngagement)
 {
-    auto model = vd::basic_model<UserSettings> {}.with(vd::member(&UserSettings::nickname, vd::monadic::not_empty<std::string>()));
+    auto model = vd::basic_model<UserSettings> {}.with(vd::member(&UserSettings::nickname, vd::monadic::not_empty));
 
     const UserSettings good { std::string { "ada" }, 8080 };
     const UserSettings bad { std::nullopt, 8080 };
@@ -290,7 +313,7 @@ TEST(MonadicNotEmptyBasicModelTest, BoundModelChecksEngagement)
 
 TEST(MonadicNotEmptyBasicModelTest, ValidateManyRejectsBatchWithEmptyOptional)
 {
-    auto model = vd::basic_model<UserSettings> {}.with(vd::member(&UserSettings::nickname, vd::monadic::not_empty<std::string>()));
+    auto model = vd::basic_model<UserSettings> {}.with(vd::member(&UserSettings::nickname, vd::monadic::not_empty));
 
     EXPECT_TRUE(vd::validate_many(model, UserSettings { std::string { "a" }, 1 }, UserSettings { std::string { "b" }, 2 }));
     EXPECT_FALSE(vd::validate_many(model, UserSettings { std::string { "a" }, 1 }, UserSettings { std::nullopt, 2 }));
@@ -300,12 +323,13 @@ TEST(MonadicNotEmptyBasicModelTest, ValidateManyRejectsBatchWithEmptyOptional)
 // MonadicNotEmptyStaticModelTest — integration with static_model<T, Rules...>
 //
 // static_model stores rules by value in a tuple, so the bare rule object is
-// accepted directly — no vd::rule wrap and no heap allocation.
+// accepted directly — no vd::rule wrap and no heap allocation. static_rule_for
+// already knows T, so nothing has to be deduced from the checker.
 // ---------------------------------------------------------------------------
 
 TEST(MonadicNotEmptyStaticModelTest, TopLevelRuleOverOptional)
 {
-    auto model = vd::make_static_model<std::optional<std::int32_t>>().with(vd::monadic::not_empty<std::int32_t>());
+    auto model = vd::make_static_model<std::optional<std::int32_t>>().with(vd::monadic::not_empty);
 
     EXPECT_TRUE(model.check(std::optional<std::int32_t> { 7 }));
     EXPECT_FALSE(model.check(std::optional<std::int32_t> {}));
@@ -313,7 +337,7 @@ TEST(MonadicNotEmptyStaticModelTest, TopLevelRuleOverOptional)
 
 TEST(MonadicNotEmptyStaticModelTest, TopLevelRuleRejectsNullptr)
 {
-    auto model = vd::make_static_model<std::optional<std::int32_t>>().with(vd::monadic::not_empty<std::int32_t>());
+    auto model = vd::make_static_model<std::optional<std::int32_t>>().with(vd::monadic::not_empty);
     EXPECT_FALSE(model.check(static_cast<const std::optional<std::int32_t>*>(nullptr)));
 }
 
@@ -321,7 +345,7 @@ TEST(MonadicNotEmptyStaticModelTest, ModelIsConstexprConstructible)
 {
     // The rule is stateless and constexpr-constructible, so the whole model can
     // be built at compile time; only check() has to run at runtime.
-    constexpr auto model = vd::make_static_model<std::optional<std::int32_t>>().with(vd::monadic::not_empty<std::int32_t>());
+    constexpr auto model = vd::make_static_model<std::optional<std::int32_t>>().with(vd::monadic::not_empty);
 
     EXPECT_TRUE(model.check(std::optional<std::int32_t> { 7 }));
     EXPECT_FALSE(model.check(std::optional<std::int32_t> {}));
@@ -331,15 +355,14 @@ TEST(MonadicNotEmptyStaticModelTest, ModelStoresNoIndirection)
 {
     // A stateless rule must not inflate the model — evidence that static_model
     // stores the rule inline instead of behind a std::function.
-    auto model = vd::make_static_model<std::optional<std::int32_t>>().with(vd::monadic::not_empty<std::int32_t>());
+    auto model = vd::make_static_model<std::optional<std::int32_t>>().with(vd::monadic::not_empty);
     static_assert(sizeof(model) == 1);
     SUCCEED();
 }
 
 TEST(MonadicNotEmptyStaticModelTest, StaticsMemberCheckerAcceptsEngagedOptional)
 {
-    auto model =
-        vd::make_static_model<UserSettings>().with(vd::statics::member(&UserSettings::nickname, vd::monadic::not_empty<std::string>()));
+    auto model = vd::make_static_model<UserSettings>().with(vd::statics::member(&UserSettings::nickname, vd::monadic::not_empty));
 
     EXPECT_TRUE(model.check(UserSettings { std::string { "ada" }, 8080 }));
     EXPECT_FALSE(model.check(UserSettings { std::nullopt, 8080 }));
@@ -347,8 +370,8 @@ TEST(MonadicNotEmptyStaticModelTest, StaticsMemberCheckerAcceptsEngagedOptional)
 
 TEST(MonadicNotEmptyStaticModelTest, StaticsFieldCheckerViaGetter)
 {
-    auto model = vd::make_static_model<UserSettings>().with(
-        vd::statics::field("nickname", &UserSettings::get_nickname, vd::monadic::not_empty<std::string>()));
+    auto model =
+        vd::make_static_model<UserSettings>().with(vd::statics::field("nickname", &UserSettings::get_nickname, vd::monadic::not_empty));
 
     EXPECT_TRUE(model.check(UserSettings { std::string { "ada" }, 8080 }));
     EXPECT_FALSE(model.check(UserSettings { std::nullopt, 8080 }));
@@ -358,10 +381,8 @@ TEST(MonadicNotEmptyStaticModelTest, RuleFactoryMemberAlsoWorks)
 {
     // vd::member yields a vd::rule<T>, which static_model accepts too — the
     // allocating and non-allocating factories must agree on the verdict.
-    auto rule_model =
-        vd::make_static_model<UserSettings>().with(vd::member(&UserSettings::nickname, vd::monadic::not_empty<std::string>()));
-    auto raw_model =
-        vd::make_static_model<UserSettings>().with(vd::statics::member(&UserSettings::nickname, vd::monadic::not_empty<std::string>()));
+    auto rule_model = vd::make_static_model<UserSettings>().with(vd::member(&UserSettings::nickname, vd::monadic::not_empty));
+    auto raw_model = vd::make_static_model<UserSettings>().with(vd::statics::member(&UserSettings::nickname, vd::monadic::not_empty));
 
     for(const UserSettings& s : { UserSettings { std::string { "ada" }, 1 }, UserSettings { std::nullopt, 1 } }) {
         EXPECT_EQ(rule_model.check(s).is_valid, raw_model.check(s).is_valid);
@@ -371,8 +392,8 @@ TEST(MonadicNotEmptyStaticModelTest, RuleFactoryMemberAlsoWorks)
 TEST(MonadicNotEmptyStaticModelTest, CheckAggregatesEveryEmptyOptional)
 {
     auto model = vd::make_static_model<UserSettings>()
-                     .with(vd::statics::member("nickname", &UserSettings::nickname, vd::monadic::not_empty<std::string>()))
-                     .with(vd::statics::member("port", &UserSettings::port, vd::monadic::not_empty<std::int32_t>()));
+                     .with(vd::statics::member("nickname", &UserSettings::nickname, vd::monadic::not_empty))
+                     .with(vd::statics::member("port", &UserSettings::port, vd::monadic::not_empty));
 
     vd::result res = model.check(UserSettings { std::nullopt, std::nullopt });
 
@@ -383,8 +404,8 @@ TEST(MonadicNotEmptyStaticModelTest, CheckAggregatesEveryEmptyOptional)
 TEST(MonadicNotEmptyStaticModelTest, ShortCheckStopsAtFirstEmptyOptional)
 {
     auto model = vd::make_static_model<UserSettings>()
-                     .with(vd::statics::member("nickname", &UserSettings::nickname, vd::monadic::not_empty<std::string>()))
-                     .with(vd::statics::member("port", &UserSettings::port, vd::monadic::not_empty<std::int32_t>()));
+                     .with(vd::statics::member("nickname", &UserSettings::nickname, vd::monadic::not_empty))
+                     .with(vd::statics::member("port", &UserSettings::port, vd::monadic::not_empty));
 
     vd::result res = model.short_check(UserSettings { std::nullopt, std::nullopt });
 
@@ -395,9 +416,10 @@ TEST(MonadicNotEmptyStaticModelTest, ShortCheckStopsAtFirstEmptyOptional)
 
 TEST(MonadicNotEmptyStaticModelTest, MixesWithNumericRules)
 {
-    // A monadic rule and a numeric rule side by side in one static_model.
+    // A monadic rule and a numeric rule side by side in one static_model — both
+    // are now shared stateless objects with a templated operator().
     auto model = vd::make_static_model<Telemetry>()
-                     .with(vd::statics::member("sample", &Telemetry::sample, vd::monadic::not_empty<double>()))
+                     .with(vd::statics::member("sample", &Telemetry::sample, vd::monadic::not_empty))
                      .with(vd::statics::member("threshold", &Telemetry::threshold, vd::numeric::finite_t));
 
     EXPECT_TRUE(model.check(Telemetry { 1.0, 0.5 }));
@@ -408,8 +430,7 @@ TEST(MonadicNotEmptyStaticModelTest, MixesWithNumericRules)
 
 TEST(MonadicNotEmptyStaticModelTest, DieIfFailedThrowsOnEmptyOptional)
 {
-    auto model =
-        vd::make_static_model<UserSettings>().with(vd::statics::member(&UserSettings::nickname, vd::monadic::not_empty<std::string>()));
+    auto model = vd::make_static_model<UserSettings>().with(vd::statics::member(&UserSettings::nickname, vd::monadic::not_empty));
 
     EXPECT_NO_THROW(model.die_if_failed(UserSettings { std::string { "ada" }, 8080 }));
     EXPECT_THROW(model.die_if_failed(UserSettings { std::nullopt, 8080 }), vd::validation_exception);
@@ -417,8 +438,7 @@ TEST(MonadicNotEmptyStaticModelTest, DieIfFailedThrowsOnEmptyOptional)
 
 TEST(MonadicNotEmptyStaticModelTest, ValidateManyRejectsBatchWithEmptyOptional)
 {
-    auto model =
-        vd::make_static_model<UserSettings>().with(vd::statics::member(&UserSettings::nickname, vd::monadic::not_empty<std::string>()));
+    auto model = vd::make_static_model<UserSettings>().with(vd::statics::member(&UserSettings::nickname, vd::monadic::not_empty));
 
     EXPECT_TRUE(vd::validate_many(model, UserSettings { std::string { "a" }, 1 }, UserSettings { std::string { "b" }, 2 }));
     EXPECT_FALSE(vd::validate_many(model, UserSettings { std::string { "a" }, 1 }, UserSettings { std::nullopt, 2 }));
@@ -426,9 +446,9 @@ TEST(MonadicNotEmptyStaticModelTest, ValidateManyRejectsBatchWithEmptyOptional)
 
 TEST(MonadicNotEmptyStaticModelTest, WithExtensionPreservesBaseModel)
 {
-    auto base = vd::make_static_model<UserSettings>().with(
-        vd::statics::member("nickname", &UserSettings::nickname, vd::monadic::not_empty<std::string>()));
-    auto extended = base.with(vd::statics::member("port", &UserSettings::port, vd::monadic::not_empty<std::int32_t>()));
+    auto base =
+        vd::make_static_model<UserSettings>().with(vd::statics::member("nickname", &UserSettings::nickname, vd::monadic::not_empty));
+    auto extended = base.with(vd::statics::member("port", &UserSettings::port, vd::monadic::not_empty));
 
     // base only checks the nickname — a missing port must still pass it
     EXPECT_TRUE(base.check(UserSettings { std::string { "ada" }, std::nullopt }));
@@ -439,9 +459,12 @@ TEST(MonadicNotEmptyStaticModelTest, WithExtensionPreservesBaseModel)
 // ---------------------------------------------------------------------------
 // MonadicAsExpectedTest — std::expected support
 //
-// The whole vd::monadic::as_expected overload set is gated behind
+// The whole vd::monadic::as_expected declaration is gated behind
 // __cpp_lib_expected, so every test below is compiled only when the standard
 // library in use actually provides std::expected.
+//
+// Like not_empty, as_expected is one shared object; both T and E are deduced
+// from the argument, so neither has to be spelled out at the call site.
 // ---------------------------------------------------------------------------
 
 #if defined(__cpp_lib_expected)
@@ -456,6 +479,7 @@ struct ParseOutcome {
 };
 
 using parsed_t = std::expected<std::int32_t, std::string>;
+using void_parsed_t = std::expected<void, std::string>;
 
 static parsed_t make_error()
 {
@@ -464,56 +488,68 @@ static parsed_t make_error()
 
 TEST(MonadicAsExpectedTest, ValueStatePasses)
 {
-    auto rule = vd::monadic::as_expected<std::int32_t, std::string>();
-    EXPECT_TRUE(rule(parsed_t { 42 }));
+    EXPECT_TRUE(vd::monadic::as_expected(parsed_t { 42 }));
 }
 
 TEST(MonadicAsExpectedTest, ErrorStateFails)
 {
-    auto rule = vd::monadic::as_expected<std::int32_t, std::string>();
-    EXPECT_FALSE(rule(make_error()));
+    EXPECT_FALSE(vd::monadic::as_expected(make_error()));
 }
 
 TEST(MonadicAsExpectedTest, FailureCarriesDescription)
 {
-    auto rule = vd::monadic::as_expected<std::int32_t, std::string>();
-    vd::result res = rule(make_error());
+    vd::result res = vd::monadic::as_expected(make_error());
 
     ASSERT_FALSE(res.is_valid);
     ASSERT_EQ(res.failed_rules.size(), 1u);
-    EXPECT_FALSE(res.failed_rules[0].empty());
+    EXPECT_NE(res.failed_rules[0].find("unexpected"), std::string::npos);
 }
 
 // Presence of a value, not its truthiness — a zero payload is still a value.
 TEST(MonadicAsExpectedTest, ValueStateWithZeroPasses)
 {
-    // Bound to a local first: the comma in the template argument list would
-    // otherwise be parsed as a second macro argument by the preprocessor.
-    auto rule = vd::monadic::as_expected<std::int32_t, std::string>();
-    EXPECT_TRUE(rule(parsed_t { 0 }));
+    EXPECT_TRUE(vd::monadic::as_expected(parsed_t { 0 }));
 }
 
 TEST(MonadicAsExpectedTest, VoidValueTypeIsSupported)
 {
-    auto rule = vd::monadic::as_expected<void, std::string>();
+    EXPECT_TRUE(vd::monadic::as_expected(void_parsed_t {}));
+    EXPECT_FALSE(vd::monadic::as_expected(void_parsed_t { std::unexpected(std::string { "boom" }) }));
+}
 
-    EXPECT_TRUE(rule(std::expected<void, std::string> {}));
-    EXPECT_FALSE(rule(std::expected<void, std::string> { std::unexpected(std::string { "boom" }) }));
+// Both T and E are deduced, so one object covers every expected specialization.
+TEST(MonadicAsExpectedTest, OneObjectServesEveryTAndE)
+{
+    using code_t = std::expected<std::string, std::int32_t>;
+
+    EXPECT_TRUE(vd::monadic::as_expected(parsed_t { 1 }));
+    EXPECT_TRUE(vd::monadic::as_expected(code_t { std::string { "ok" } }));
+    EXPECT_TRUE(vd::monadic::as_expected(void_parsed_t {}));
+    EXPECT_FALSE(vd::monadic::as_expected(code_t { std::unexpected(std::int32_t { -1 }) }));
 }
 
 TEST(MonadicAsExpectedTest, SatisfiesBothRuleConcepts)
 {
-    using rule_t = decltype(vd::monadic::as_expected<std::int32_t, std::string>());
+    using rule_t = vd::monadic::as_expected_t;
     static_assert(vd::value_checker<rule_t, parsed_t>);
     static_assert(vd::static_rule_for<rule_t, parsed_t>);
+    static_assert(vd::value_checker<const rule_t&, parsed_t>);
     static_assert(std::is_same_v<std::invoke_result_t<rule_t, const parsed_t&>, vd::result>);
+    static_assert(std::is_empty_v<rule_t>);
+    SUCCEED();
+}
+
+// The two rules do not accept each other's wrapper — deduction keeps them apart.
+TEST(MonadicAsExpectedTest, RulesDoNotCrossAcceptWrappers)
+{
+    static_assert(!vd::value_checker<vd::monadic::as_expected_t, std::optional<std::int32_t>>);
+    static_assert(!vd::value_checker<vd::monadic::not_empty_t, parsed_t>);
     SUCCEED();
 }
 
 TEST(MonadicAsExpectedTest, BasicModelMemberChecker)
 {
-    auto model = vd::basic_model<ParseOutcome> {}.with(
-        vd::member("parsed", &ParseOutcome::parsed, vd::monadic::as_expected<std::int32_t, std::string>()));
+    auto model = vd::basic_model<ParseOutcome> {}.with(vd::member("parsed", &ParseOutcome::parsed, vd::monadic::as_expected));
 
     EXPECT_TRUE(model.check(ParseOutcome { parsed_t { 42 } }));
 
@@ -525,16 +561,15 @@ TEST(MonadicAsExpectedTest, BasicModelMemberChecker)
 
 TEST(MonadicAsExpectedTest, BasicModelFieldCheckerViaGetter)
 {
-    auto model = vd::basic_model<ParseOutcome> {}.with(
-        vd::field("parsed", &ParseOutcome::get_parsed, vd::monadic::as_expected<std::int32_t, std::string>()));
+    auto model = vd::basic_model<ParseOutcome> {}.with(vd::field("parsed", &ParseOutcome::get_parsed, vd::monadic::as_expected));
 
     EXPECT_TRUE(model.check(ParseOutcome { parsed_t { 42 } }));
     EXPECT_FALSE(model.check(ParseOutcome { make_error() }));
 }
 
-TEST(MonadicAsExpectedTest, BasicModelTopLevelRuleViaPredicate)
+TEST(MonadicAsExpectedTest, BasicModelTopLevelRuleViaExplicitWrap)
 {
-    auto model = vd::basic_model<parsed_t> {}.with(vd::predicate(vd::monadic::as_expected<std::int32_t, std::string>()));
+    auto model = vd::basic_model<parsed_t> {}.with(vd::rule<parsed_t>(vd::monadic::as_expected));
 
     EXPECT_TRUE(model.check(parsed_t { 42 }));
     EXPECT_FALSE(model.check(make_error()));
@@ -542,7 +577,7 @@ TEST(MonadicAsExpectedTest, BasicModelTopLevelRuleViaPredicate)
 
 TEST(MonadicAsExpectedTest, StaticModelTopLevelRule)
 {
-    auto model = vd::make_static_model<parsed_t>().with(vd::monadic::as_expected<std::int32_t, std::string>());
+    auto model = vd::make_static_model<parsed_t>().with(vd::monadic::as_expected);
 
     EXPECT_TRUE(model.check(parsed_t { 42 }));
     EXPECT_FALSE(model.check(make_error()));
@@ -550,7 +585,7 @@ TEST(MonadicAsExpectedTest, StaticModelTopLevelRule)
 
 TEST(MonadicAsExpectedTest, StaticModelIsConstexprConstructible)
 {
-    constexpr auto model = vd::make_static_model<parsed_t>().with(vd::monadic::as_expected<std::int32_t, std::string>());
+    constexpr auto model = vd::make_static_model<parsed_t>().with(vd::monadic::as_expected);
 
     EXPECT_TRUE(model.check(parsed_t { 42 }));
     EXPECT_FALSE(model.check(make_error()));
@@ -558,8 +593,7 @@ TEST(MonadicAsExpectedTest, StaticModelIsConstexprConstructible)
 
 TEST(MonadicAsExpectedTest, StaticModelStaticsMemberChecker)
 {
-    auto model = vd::make_static_model<ParseOutcome>().with(
-        vd::statics::member("parsed", &ParseOutcome::parsed, vd::monadic::as_expected<std::int32_t, std::string>()));
+    auto model = vd::make_static_model<ParseOutcome>().with(vd::statics::member("parsed", &ParseOutcome::parsed, vd::monadic::as_expected));
 
     EXPECT_TRUE(model.check(ParseOutcome { parsed_t { 42 } }));
     EXPECT_FALSE(model.check(ParseOutcome { make_error() }));
@@ -567,8 +601,7 @@ TEST(MonadicAsExpectedTest, StaticModelStaticsMemberChecker)
 
 TEST(MonadicAsExpectedTest, DieIfFailedThrowsOnErrorState)
 {
-    auto model = vd::make_static_model<ParseOutcome>().with(
-        vd::statics::member(&ParseOutcome::parsed, vd::monadic::as_expected<std::int32_t, std::string>()));
+    auto model = vd::make_static_model<ParseOutcome>().with(vd::statics::member(&ParseOutcome::parsed, vd::monadic::as_expected));
 
     EXPECT_NO_THROW(model.die_if_failed(ParseOutcome { parsed_t { 42 } }));
     EXPECT_THROW(model.die_if_failed(ParseOutcome { make_error() }), vd::validation_exception);
@@ -582,8 +615,8 @@ TEST(MonadicAsExpectedTest, CombinesWithOptionalRuleInOneModel)
     };
 
     auto model = vd::make_static_model<Mixed>()
-                     .with(vd::statics::member("tag", &Mixed::tag, vd::monadic::not_empty<std::string>()))
-                     .with(vd::statics::member("parsed", &Mixed::parsed, vd::monadic::as_expected<std::int32_t, std::string>()));
+                     .with(vd::statics::member("tag", &Mixed::tag, vd::monadic::not_empty))
+                     .with(vd::statics::member("parsed", &Mixed::parsed, vd::monadic::as_expected));
 
     EXPECT_TRUE(model.check(Mixed { std::string { "t" }, parsed_t { 1 } }));
     EXPECT_EQ(model.check(Mixed { std::nullopt, make_error() }).failed_rules.size(), 2u);

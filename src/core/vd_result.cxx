@@ -67,10 +67,10 @@ vd::result vd::result::ok()
     return { true };
 }
 
-vd::result vd::result::failed(std::vector<std::string> failed_rules)
+vd::result vd::result::failed(vd::_error_list failed_rules)
 {
-    vd::require(!failed_rules.empty(), "Failed result must have at least one failed rule description");
-    return { false, std::move(failed_rules) };
+    vd::require(!failed_rules.messages().empty(), "Failed result must have at least one failed rule description");
+    return { false, failed_rules.messages() };
 }
 
 vd::result::operator bool() const

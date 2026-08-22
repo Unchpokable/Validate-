@@ -17,36 +17,40 @@
 
 namespace vd::monadic
 {
-template<typename T, typename E>
-constexpr auto as_expected()
-{
-    return [](const std::expected<T, E>& expected) -> vd::result {
+struct as_expected_t final {
+    template<typename T, typename E>
+    vd::result operator()(const std::expected<T, E>& expected) const
+    {
         if(expected.has_value()) {
             return vd::result::ok();
         }
         else {
-            return vd::result::failed({ "Value must not be empty" });
+            return vd::result::failed("Value is unexpected");
         }
-    };
-}
+    }
+};
+
+inline constexpr as_expected_t as_expected;
 } // namespace vd::monadic
 
 #endif
 
 namespace vd::monadic
 {
-template<typename T>
-constexpr auto not_empty()
-{
-    return [](const std::optional<T>& opt) -> vd::result {
+struct not_empty_t final {
+    template<typename T>
+    vd::result operator()(const std::optional<T>& opt) const
+    {
         if(opt.has_value()) {
             return vd::result::ok();
         }
         else {
-            return vd::result::failed({ "Value must not be empty" });
+            return vd::result::failed("Value must not be empty!");
         }
-    };
-}
+    }
+};
+
+inline constexpr not_empty_t not_empty;
 } // namespace vd::monadic
 
 #endif

@@ -31,7 +31,7 @@ vd::result r = user_model.check(u);  // r.is_valid == true
 - **Numeric bounds** — inclusive/exclusive ranges, one-sided bounds, and outside-range checks for all arithmetic types
 - **String checkers** — compile-time patterns via [CTRE](https://github.com/hanickadot/compile-time-regular-expressions), runtime `std::regex`, length checks (`min_length`, `max_length`, `length_in_between`), and common presets (`email_like`, `uri_like`, `non_empty`, …); most checkers work with any `std::basic_string_view<CharT>` / `std::basic_string<CharT>`, not just `std::string`
 - **Modern assertions** — `vd::require` with `std::format` messages, source-location diagnostics, optional exception throwing, and custom callbacks
-- **Monadic checkers** — `vd::monadic::not_empty` for `std::optional<T>` and `vd::monadic::as_expected` for `std::expected<T, E>` (C++23, feature-test gated)
+- **Monadic checkers** — `vd::monadic::not_empty` for `std::optional<T>` and `vd::monadic::as_expected` for `std::expected<T, E>` (C++23, feature-test gated); the wrapped types are deduced from the argument, so one shared object serves every specialization
 - **Non-null pointer contract** — `vd::not_null<T*>` enforces that a raw pointer parameter is never `nullptr`, checked at compile time or runtime; `vd::memory::not_null` is the model-rule counterpart for pointer-like fields
 - **Qt extension** — `QString` / `QStringView` checkers (including length checks) and `Q_PROPERTY` validation for Qt 5/6 projects
 
@@ -251,13 +251,21 @@ All checkers accept `std::string_view` and return `vd::result`. `std::string` fi
 Checkers for the standard wrapper types — they ask whether the wrapper carries a value, and nothing more:
 
 ```cpp
-vd::monadic::not_empty<std::string>()                      // std::optional<std::string> is engaged
-vd::monadic::as_expected<std::int32_t, std::string>()      // std::expected<int32_t, string> holds a value
+vd::monadic::not_empty      // any std::optional<T> is engaged
+vd::monadic::as_expected    // any std::expected<T, E> holds a value
 ```
 
-The template parameter is the *payload* type, so `not_empty<std::string>()` checks a `std::optional<std::string>` field. The check is `has_value()`, not truthiness — an engaged `optional<int>{0}` or `optional<std::string>{""}` passes, which keeps "present" and "valid" as separate, independently reportable rules.
+Each is a single stateless object with a templated `operator()`, so the wrapped types are deduced from the argument — nothing to spell out, and the same object covers every specialization:
 
-`as_expected` requires C++23 and is declared behind `#if defined(__cpp_lib_expected)`; on a toolchain without `<expected>` the symbol simply does not exist. `std::expected<void, E>` is supported. See [docs/monadic.md](docs/monadic.md) for composing these with a checker for the payload.
+```cpp
+auto model = vd::basic_model<UserSettings>()
+    .with(vd::member("nickname", &UserSettings::nickname, vd::monadic::not_empty))   // optional<string>
+    .with(vd::member("port",     &UserSettings::port,     vd::monadic::not_empty));  // optional<int32_t>
+```
+
+The check is `has_value()`, not truthiness — an engaged `optional<int>{0}` or `optional<std::string>{""}` passes, which keeps "present" and "valid" as separate, independently reportable rules.
+
+`as_expected` requires C++23 and is declared behind `#if defined(__cpp_lib_expected)`; on a toolchain without `<expected>` the symbol simply does not exist. `std::expected<void, E>` is supported. See [docs/monadic.md](docs/monadic.md) for composing these with a checker for the payload, and for the one restriction the templated `operator()` brings (`vd::predicate` cannot deduce from it — wrap in `vd::rule<T>` instead).
 
 ### `vd::require`
 
