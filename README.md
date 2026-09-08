@@ -30,7 +30,8 @@ vd::result r = user_model.check(u);  // r.is_valid == true
 - **Type-safe rule factories** — `vd::member`, `vd::field`, `vd::predicate` (and `vd::statics::member`/`vd::statics::field` for `static_model`) with full template argument deduction; optional field names in error messages
 - **Numeric bounds** — inclusive/exclusive ranges, one-sided bounds, and outside-range checks for all arithmetic types
 - **String checkers** — compile-time patterns via [CTRE](https://github.com/hanickadot/compile-time-regular-expressions), runtime `std::regex`, length checks (`min_length`, `max_length`, `length_in_between`), and common presets (`email_like`, `uri_like`, `non_empty`, …); most checkers work with any `std::basic_string_view<CharT>` / `std::basic_string<CharT>`, not just `std::string`
-- **Modern assertions** — `vd::require` with `std::format` messages, source-location diagnostics, optional exception throwing, and custom callbacks
+- **Modern assertions** — the `vd::require` family with `std::format` messages and source-location diagnostics: throwing by default, `vd::strict_require` to abort, `vd::require_cb` for custom callbacks, and debug-only counterparts that vanish in release
+- **Monadic checkers** — `vd::monadic::not_empty` for `std::optional<T>` and `vd::monadic::as_expected` for `std::expected<T, E>` (C++23, feature-test gated); the wrapped types are deduced from the argument, so one shared object serves every specialization
 - **Non-null pointer contract** — `vd::not_null<T*>` enforces that a raw pointer parameter is never `nullptr`, checked at compile time or runtime; `vd::memory::not_null` is the model-rule counterpart for pointer-like fields
 - **Qt extension** — `QString` / `QStringView` checkers (including length checks) and `Q_PROPERTY` validation for Qt 5/6 projects
 
@@ -88,8 +89,33 @@ target_link_libraries(my_target PRIVATE Validate::vd Qt6::Core)
 
 ## Building and running tests
 
+Presets are the shortest path. `core` builds the library and its seven test suites; `qt` adds the Qt Base extension and its three, locating Qt through the `QTDIR` environment variable:
+
 ```bash
-cmake -B build
+cmake --preset core          # or: cmake --preset qt
+cmake --build --preset core-debug
+ctest --preset core-debug
+```
+
+Each configure preset has `-debug` and `-release` build and test presets (`core-debug`, `core-release`, `qt-debug`, `qt-release`) and builds into `out/build/<preset>`. They use the `Ninja Multi-Config` generator, so on Windows run them from a Developer Command Prompt — `cl.exe` has to be on `PATH`.
+
+Alternatively, the scripts in `scripts/` configure, build, and run every suite in one step, and resolve the Qt DLL path for the test run themselves:
+
+```powershell
+.\scripts\build_and_test.ps1                                        # core only
+.\scripts\build_and_test.ps1 -QtDir "C:\Qt\6.9.2\msvc2022_64"       # with Qt
+.\scripts\build_and_test.ps1 -Config Release
+```
+
+```bash
+./scripts/build_and_test.sh
+./scripts/build_and_test.sh Debug /path/to/Qt6
+```
+
+They build into `build/`, separate from the presets' `out/build/`, so the two never share a cache. Plain CMake works too, if you want a generator of your own choosing:
+
+```bash
+cmake -B build -DVD_EXTENSION_QT_BASE=ON -DVD_QT_DIR=/path/to/Qt6
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
@@ -220,8 +246,10 @@ Exclusive bounds use the library's own `vd::ct_nextafter<T>` — a `constexpr` i
 Check for finite values (rejects `NaN` and `inf`):
 
 ```cpp
-vd::numeric::finite<double>()
+vd::numeric::finite_t
 ```
+
+`finite_t` is a single `inline constexpr` object, not a factory call — `finite_guard` templates its `operator()` rather than the class, so the same object works for every arithmetic type and can be applied to `double`, `float` and `int` members of one model. It is empty, so `static_model` stores it with no indirection at all. As a top-level `basic_model` rule it must be wrapped explicitly (`vd::rule<double>(vd::numeric::finite_t)`) — `vd::predicate` cannot deduce a value type from a templated `operator()`.
 
 Available aliases: `byte_bounds`, `short_bounds`, `int_bounds`, `long_bounds`, `float_bounds`, `double_bounds`, and their unsigned / signed variants.
 
@@ -243,33 +271,59 @@ All checkers accept `std::string_view` and return `vd::result`. `std::string` fi
 
 `non_empty`, `empty`, `empty_or_whitespace`, and the three length checkers additionally accept any `std::basic_string_view<CharT>` / `std::basic_string<CharT>` (`wchar_t`, `char8_t`, `char16_t`, `char32_t`), so they work with `std::wstring`, `std::u16string`, etc. `email_like`, `uri_like`, and `regex` remain `std::string_view`-only. Length checkers count **code units**, not user-perceived characters — see [docs/string-rules.md](docs/string-rules.md) for the distinction. `min_length`/`max_length`/`length_in_between` throw `vd::assertion_exception` if constructed with invalid bounds (e.g. `max_length(0)` or `length_in_between(10, 5)`).
 
-### `vd::require`
+### Monadic rules
 
-`vd::require` is a type-safe, source-aware replacement for `assert()`.
+Checkers for the standard wrapper types — they ask whether the wrapper carries a value, and nothing more:
 
 ```cpp
-// Abort on failure — prints file, line, function to stderr
+vd::monadic::not_empty      // any std::optional<T> is engaged
+vd::monadic::as_expected    // any std::expected<T, E> holds a value
+```
+
+Each is a single stateless object with a templated `operator()`, so the wrapped types are deduced from the argument — nothing to spell out, and the same object covers every specialization:
+
+```cpp
+auto model = vd::basic_model<UserSettings>()
+    .with(vd::member("nickname", &UserSettings::nickname, vd::monadic::not_empty))   // optional<string>
+    .with(vd::member("port",     &UserSettings::port,     vd::monadic::not_empty));  // optional<int32_t>
+```
+
+The check is `has_value()`, not truthiness — an engaged `optional<int>{0}` or `optional<std::string>{""}` passes, which keeps "present" and "valid" as separate, independently reportable rules.
+
+`as_expected` requires C++23 and is declared behind `#if defined(__cpp_lib_expected)`; on a toolchain without `<expected>` the symbol simply does not exist. `std::expected<void, E>` is supported. See [docs/monadic.md](docs/monadic.md) for composing these with a checker for the payload, and for the one restriction the templated `operator()` brings (`vd::predicate` cannot deduce from it — wrap in `vd::rule<T>` instead).
+
+### `vd::require`
+
+The `vd::require` family is a type-safe, source-aware replacement for `assert()`. The flavours differ only in what happens on failure — the message is built and decorated identically by all of them.
+
+```cpp
+// Throw on failure — vd::assertion_exception
 vd::require(ptr != nullptr, "Expected non-null pointer in {}", __func__);
 
-// Throw on failure — exception.what() contains the formatted message only
+// Throw a type of your choice
 vd::require<std::runtime_error>(value > 0, "Value must be positive, got {}", value);
+
+// Abort on failure — prints to stderr, then std::abort()
+vd::strict_require(ptr != nullptr, "Expected non-null pointer in {}", __func__);
 
 // Custom callback on failure (zero-overhead NTTP, receives std::string_view)
 void my_logger(std::string_view msg) { /* … */ }
-vd::require_callback<my_logger>(ok, "Validation failed: {}", reason);
+vd::require_cb<my_logger>(ok, "Validation failed: {}", reason);
 ```
 
 The format string is checked at compile time via `std::format_string`. Source location is captured at the call site — diagnostics always point to your code, not library internals.
 
-**Output on abort:**
+**Message on failure** — the same text whether it is thrown, printed or handed to a callback:
 ```
 Assertion failed: Expected non-null pointer in foo
-File: src/foo.cpp
+File: src/foo.cxx
 Line: 42
 Function: void foo()
 ```
 
-**Debug-only overloads** (`required`, `require_callbackd`) compile to no-ops when `_NDEBUG` is defined.
+**Debug-only counterparts** (`strict_required`, `required`, `require_cbd`) behave identically in a debug build and compile to no-ops in release — so their condition is not evaluated there and must not carry side effects. A build counts as release if any of `NDEBUG`, `_NDEBUG` or `RELEASE` is defined.
+
+`vd::ct_require<E>` is the `constexpr`-usable flavour: in a constant-evaluated context a failed check makes the call a non-constant expression, i.e. a compile error. See [docs/assert.md](docs/assert.md) for the full reference.
 
 ### Qt extension
 
@@ -331,7 +385,7 @@ namespace my_rules {
 
 ## Further reading
 
-The [`docs/`](docs/) directory covers the internals — design rationale, TMP/concept choices, and module-by-module reference: [overview](docs/overview.md), [models](docs/models.md), [static-model](docs/static-model.md), [numeric](docs/numeric.md), [string-rules](docs/string-rules.md), [assert](docs/assert.md), [not_null](docs/not_null.md), [qt extensions](docs/qt%20extensions.md), [extending](docs/extending.md).
+The [`docs/`](docs/) directory covers the internals — design rationale, TMP/concept choices, and module-by-module reference: [overview](docs/overview.md), [models](docs/models.md), [static-model](docs/static-model.md), [numeric](docs/numeric.md), [string-rules](docs/string-rules.md), [monadic](docs/monadic.md), [assert](docs/assert.md), [not_null](docs/not_null.md), [qt extensions](docs/qt%20extensions.md), [extending](docs/extending.md).
 
 ## License
 

@@ -8,6 +8,8 @@
 #include <string_view>
 #include <type_traits>
 
+#include "core/vd_exception.hxx"
+
 namespace vd::detail
 {
 // Wraps a format string and captures source_location at the call site via its consteval ctor.
@@ -24,16 +26,20 @@ struct assert_format {
 };
 
 [[noreturn]] void assert_fail(std::string_view message, const std::source_location& loc);
+[[nodiscard]] std::string format_fail(std::string_view message, const std::source_location& loc);
 } // namespace vd::detail
 
 namespace vd::detail
 {
+// Checked on a const lvalue on purpose: the require family takes its condition by
+// const&, so a type whose operator bool() / operator!() is non-const must be rejected
+// by the constraint rather than blow up inside the template body.
 template<typename T>
-concept __contextually_bool_impl = requires(T& t) { static_cast<bool>(t); };
+concept vd_contextually_bool_impl = requires(const T& t) { static_cast<bool>(t); };
 
 template<typename T>
-concept contextually_bool = __contextually_bool_impl<T> && requires(T& t) {
-    { !t } -> __contextually_bool_impl;
+concept contextually_bool = vd_contextually_bool_impl<T> && requires(const T& t) {
+    { !t } -> vd_contextually_bool_impl;
 };
 } // namespace vd::detail
 
@@ -41,10 +47,10 @@ namespace vd
 {
 template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
 requires std::derived_from<ExceptionType, std::exception>
-constexpr void ct_require(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+constexpr void ct_require(const Cond& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
-        throw ExceptionType(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
+        throw ExceptionType(detail::format_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc));
     }
 }
 } // namespace vd
@@ -52,81 +58,99 @@ constexpr void ct_require(Cond&& condition, detail::assert_format<std::type_iden
 namespace vd
 {
 template<detail::contextually_bool Cond, typename... Args>
-void require(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void strict_require(const Cond& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
         detail::assert_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc);
     }
 }
 
-template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
-requires std::derived_from<ExceptionType, std::exception>
-void require(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
-{
-    if(!condition) {
-        throw ExceptionType(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
-    }
-}
-
-template<auto OnFailed, detail::contextually_bool Cond, typename... Args>
-requires std::invocable<decltype(OnFailed), std::string_view>
-void require_callback(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
-{
-    if(!condition) {
-        OnFailed(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
-    }
-}
-
-#if not defined(_NDEBUG) || not defined(NDEBUG) || not defined(RELEASE)
-
-/// same as require() but working only in debug builds
 template<detail::contextually_bool Cond, typename... Args>
-void required(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void require(const Cond& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+{
+    if(!condition) {
+        throw vd::assertion_exception(vd::detail::format_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc));
+    }
+}
+
+template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
+requires std::derived_from<ExceptionType, std::exception>
+void require(const Cond& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+{
+    if(!condition) {
+        throw ExceptionType(detail::format_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc));
+    }
+}
+
+template<auto OnFailed, detail::contextually_bool Cond, typename... Args>
+requires std::invocable<decltype(OnFailed), std::string_view>
+void require_cb(const Cond& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+{
+    if(!condition) {
+        OnFailed(detail::format_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc));
+    }
+}
+
+// Debug-only family: active only when the build declares itself a debug build,
+// i.e. when none of the release markers is defined. A disjunction here would keep
+// these compiled in for every ordinary release build (MSVC defines NDEBUG alone).
+#if not defined(_NDEBUG) and not defined(NDEBUG) and not defined(RELEASE)
+
+template<detail::contextually_bool Cond, typename... Args>
+void strict_required(const Cond& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
         detail::assert_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc);
     }
 }
 
-/// same as require() but working only in debug builds
-template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
-requires std::derived_from<ExceptionType, std::exception>
-void required(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+template<detail::contextually_bool Cond, typename... Args>
+void required(const Cond& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
-        throw ExceptionType(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
+        throw vd::assertion_exception(detail::format_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc));
     }
 }
 
-/// same as require_callback() but working only in debug builds
-template<auto OnFailed, detail::contextually_bool Cond, typename... Args>
-requires std::invocable<decltype(OnFailed), std::string_view>
-void require_callbackd(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
+requires std::derived_from<ExceptionType, std::exception>
+void required(const Cond& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
     if(!condition) {
-        OnFailed(std::format(fmt_loc.fmt, std::forward<Args>(args)...));
+        throw ExceptionType(detail::format_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc));
+    }
+}
+
+template<auto OnFailed, detail::contextually_bool Cond, typename... Args>
+requires std::invocable<decltype(OnFailed), std::string_view>
+void require_cbd(const Cond& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+{
+    if(!condition) {
+        OnFailed(detail::format_fail(std::format(fmt_loc.fmt, std::forward<Args>(args)...), fmt_loc.loc));
     }
 }
 
 #else
 
-/// same as require() but working only in debug builds
 template<detail::contextually_bool Cond, typename... Args>
-void required(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void strict_required(const Cond& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
 }
 
-/// same as require() but working only in debug builds
+template<detail::contextually_bool Cond, typename... Args>
+void required(const Cond& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+{
+}
+
 template<typename ExceptionType, detail::contextually_bool Cond, typename... Args>
 requires std::derived_from<ExceptionType, std::exception>
-void required(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void required(const Cond& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
 }
 
-/// same as require_callback() but working only in debug builds
 template<auto OnFailed, detail::contextually_bool Cond, typename... Args>
 requires std::invocable<decltype(OnFailed), std::string_view>
-void require_callbackd(Cond&& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
+void require_cbd(const Cond& condition, detail::assert_format<std::type_identity_t<Args>...> fmt_loc, Args&&... args)
 {
 }
 

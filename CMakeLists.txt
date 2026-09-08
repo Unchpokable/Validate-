@@ -37,6 +37,35 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     endif()
 endif()
 
+# ── C++ standard selection ─────────────────────────────────────────────────────
+# vd's own sources are compiled with the newest C++ standard the active compiler
+# understands, so library-internal code can opportunistically use newer standard
+# library features (e.g. the std::expected-backed monadic rules gated behind
+# __cpp_lib_expected in vd_monadic_rules.hxx). This is a private per-target
+# property (set via vd_use_highest_cxx_standard below), not a usage requirement --
+# it never forces a higher standard onto downstream consumers. Consumers only
+# need to satisfy the PUBLIC cxx_std_20 floor set on the vd target further down;
+# a consumer building at C++23+ still gets __cpp_lib_expected etc. defined in
+# their own translation units automatically, since the headers are header-only.
+set(VD_CXX_STANDARD 20)
+foreach(_vd_candidate_std 26 23 20)
+    if("cxx_std_${_vd_candidate_std}" IN_LIST CMAKE_CXX_COMPILE_FEATURES)
+        set(VD_CXX_STANDARD ${_vd_candidate_std})
+        break()
+    endif()
+endforeach()
+unset(_vd_candidate_std)
+
+message(STATUS "Validate: building library/test sources as C++${VD_CXX_STANDARD} (consumers require >= C++20)")
+
+function(vd_use_highest_cxx_standard target)
+    set_target_properties(${target} PROPERTIES
+        CXX_STANDARD            ${VD_CXX_STANDARD}
+        CXX_STANDARD_REQUIRED   ON
+        CXX_EXTENSIONS          OFF
+    )
+endfunction()
+
 # ── Static library (all compiled code lives here) ─────────────────────────────
 add_library(vd STATIC
     src/assert/vd_assert.cxx
@@ -44,6 +73,7 @@ add_library(vd STATIC
     src/core/vd_result.cxx
 )
 add_library(Validate::vd ALIAS vd)
+vd_use_highest_cxx_standard(vd)
 
 target_include_directories(vd PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>

@@ -5,7 +5,7 @@
 **Validate!** is a header-first C++20 library for declarative data validation.
 The idea: describe the validation rules for an object once, through a *model*, and then apply it to any number of objects.
 
-The library is not fully header-only: most of the API is template code in headers, but the non-template parts (`vd::detail::assert_fail`, `vd::result`, `regex_checker`/`regex()` from `string_rules`) are moved into `.cxx` files and built into a static library `vd` (`add_library(vd STATIC ...)` in `CMakeLists.txt`). When consumed via `FetchContent`, linking (`target_link_libraries(... Validate::vd)`) is required — just including `<vd.hxx>` without linking is not enough.
+The library is not fully header-only: most of the API is template code in headers, but the non-template parts (`vd::detail::assert_fail`/`format_fail`, `vd::result`, `regex_checker`/`regex()` from `string_rules`) are moved into `.cxx` files and built into a static library `vd` (`add_library(vd STATIC ...)` in `CMakeLists.txt`). When consumed via `FetchContent`, linking (`target_link_libraries(... Validate::vd)`) is required — just including `<vd.hxx>` without linking is not enough.
 
 ```cpp
 struct User {
@@ -50,8 +50,8 @@ src/
 ├── vd_ext.hxx                 # re-export: Qt extensions (VD_ENABLE_EXTENSION_QT_BASE / _QT_WIDGETS / _QT_QML)
 │
 ├── assert/
-│   ├── vd_assert.hxx          # Implementation of vd::require / vd::require_callback / vd::ct_require
-│   └── vd_assert.cxx          # Implementation of vd::details::assert_fail
+│   ├── vd_assert.hxx          # vd::strict_require / vd::require / vd::require_cb / vd::ct_require
+│   └── vd_assert.cxx          # Implementation of vd::detail::format_fail / assert_fail
 │
 ├── core/
 │   ├── vd_result.hxx          # vd::result — declaration (data + method signatures)
@@ -68,14 +68,15 @@ src/
 │   ├── vd_basic_model.hxx     # basic_model<T>, basic_bound_model<T>, validate_many()
 │   ├── vd_static_model.hxx    # static_model<T, Rules...> — compile-time model (see static-model.md)
 │   ├── vd_memory.hxx          # vd::memory::not_null — ready-made checker for pointer-like fields
-│   ├── vd_numeric.hxx         # numeric_bounds<T> + type aliases
+│   ├── vd_monadic_rules.hxx   # vd::monadic::not_empty / as_expected — optional and expected checkers
+│   ├── vd_numeric.hxx         # numeric_bounds<T>, finite_guard + type aliases
 │   ├── vd_string_rules.hxx    # string_match<>, regex_checker, length rules, factory functions
 │   └── vd_string_rules.cxx    # Implementation of regex_checker::operator() and regex() (std::regex — non-template)
 │
 ├── utils/
 │   ├── vd_ctnextafter.hxx     # constexpr ct_nextafter<T> + concept generic_numer
 │   ├── vd_overload.hxx        # vd::overloaded<Ts...> — helper for std::visit; unused elsewhere in the library
-│   └── vd_sourceloc.hxx       # vd::here() — consteval wrapper around source_location::current(); not called anywhere
+│   └── vd_sourceloc.hxx       # vd::here() + opt-in std::formatter<source_location>; not in <vd.hxx>, include directly
 │
 └── inline_deps/
     └── ctre.hpp               # Compile-Time Regular Expressions (CTRE)
@@ -90,10 +91,11 @@ ext/qt/
     └── vd_qproperty.hxx       # qt_property() for Q_PROPERTY
 
 tests/
-├── test_assert.cxx            # Tests for vd::require / vd::ct_require
-├── test_models.cxx            # Tests for rule, basic_model, numeric_bounds
+├── test_assert.cxx            # Tests for the vd::require family / vd::ct_require
+├── test_models.cxx            # Tests for rule, basic_model, numeric_bounds, finite_guard
 ├── test_static_model.cxx      # Tests for static_model<T, Rules...>
 ├── test_string_rules.cxx      # Tests for string_rules, including CharT generalization and length rules
+├── test_monadic_rules.cxx     # Tests for vd::monadic against basic_model and static_model
 ├── test_not_null.cxx          # Tests for vd::not_null<T*>
 ├── test_integration.cxx       # Integration tests for the whole library
 ├── test_qt_property.cxx       # Tests for qt_property()
@@ -108,6 +110,7 @@ docs/
 ├── not_null.md                # not_null<T*> and vd::memory::not_null
 ├── numeric.md                 # numeric_bounds
 ├── string-rules.md            # string_rules
+├── monadic.md                 # vd::monadic — optional / expected checkers
 ├── extending.md                # How to add new checkers and modules
 └── qt extensions.md           # Qt extensions (QString, QProperty)
 ```
@@ -125,8 +128,10 @@ docs/
 | `value_checker` | Concept: callable `V -> bool` (or `V -> vd::result`, since it converts to `bool`). Used as the second argument to the `field`/`member` factories — validates a **field's value**. |
 | `static_rule_for<Rule, T>` | Concept for `static_model::with()`: callable `const T& -> bool \| vd::result`. Structurally similar to `value_checker`, but validates the **whole object**, not a field's value. |
 | `numeric_bounds<T>` | Implements `value_checker` for numeric types. |
+| `finite_guard` | Implements `value_checker` for numeric types by rejecting `NaN`/`inf`. Templates `operator()`, not the class, so the single `vd::numeric::finite_t` object serves every arithmetic type. |
 | `string_match<Matcher>` | Implements `value_checker` for strings via an NTTP matcher; generalized over `basic_string_view<CharT>`/`basic_string<CharT>`. |
 | `regex_checker` | Implements `value_checker` for strings via `std::regex` with a runtime pattern (`std::string_view` only). |
+| `not_empty_t` / `as_expected_t` | Implement `value_checker` for `std::optional<T>` / `std::expected<T, E>`. Like `finite_guard`, they template `operator()` rather than the class, so the single `vd::monadic::not_empty` / `vd::monadic::as_expected` object deduces the wrapped types and serves every specialization. Check engagement only — not the payload. `as_expected` requires C++23. See [monadic.md](monadic.md). |
 
 ## How it all connects
 

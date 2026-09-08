@@ -221,11 +221,13 @@ A **full-string match** is used (analogous to `std::regex_match`, not `std::rege
 
 ### Invalid pattern
 
-If `QRegularExpression::isValid()` returns `false`, `vd::require(false, ...)` is called → `std::abort()` with diagnostics on `stderr`.
+If `QRegularExpression::isValid()` returns `false`, `vd::require(...)` is called → throws `vd::assertion_exception` carrying the pattern and the call site.
 
 ```cpp
+// throws at construction, not on the first check:
 auto bad = vd::qt::string_rules::regex("[invalid");
-bad(QStringView{});  // abort: "Invalid regex pattern: [invalid"
+// vd::assertion_exception: "Assertion failed: Invalid regex pattern: [invalid"
+//                          + File / Line / Function of this call
 ```
 
 ### Advantage over `std::regex`

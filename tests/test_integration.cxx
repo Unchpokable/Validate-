@@ -652,7 +652,7 @@ TEST(BulkValidationTest, FilterValidRegistrations_IntoAccepted)
 }
 
 // ============================================================================
-// 8. require_callback: per-field error collection
+// 8. require_cb: per-field error collection
 // ============================================================================
 
 static std::vector<std::string> g_errors;
@@ -673,10 +673,10 @@ TEST_F(FieldErrorCollectionTest, AllFieldsValid_NoErrors)
 {
     UserRegistration good { "alice", "alice@example.com", 25, "securepass!" };
 
-    vd::require_callback<push_error>(!good.username.empty(), "Username required");
-    vd::require_callback<push_error>(vd::string_rules::email_like()(good.email), "Email invalid");
-    vd::require_callback<push_error>(vd::int_bounds::inclusive(18, 120)(good.age), "Age out of range");
-    vd::require_callback<push_error>(good.password.size() >= 8, "Password too short");
+    vd::require_cb<push_error>(!good.username.empty(), "Username required");
+    vd::require_cb<push_error>(vd::string_rules::email_like()(good.email), "Email invalid");
+    vd::require_cb<push_error>(vd::int_bounds::inclusive(18, 120)(good.age), "Age out of range");
+    vd::require_cb<push_error>(good.password.size() >= 8, "Password too short");
 
     EXPECT_TRUE(g_errors.empty());
 }
@@ -685,23 +685,26 @@ TEST_F(FieldErrorCollectionTest, InvalidAge_CollectsFormattedMessage)
 {
     UserRegistration bad { "alice", "alice@example.com", 15, "securepass!" };
 
-    vd::require_callback<push_error>(!bad.username.empty(), "Username required");
-    vd::require_callback<push_error>(vd::string_rules::email_like()(bad.email), "Email invalid");
-    vd::require_callback<push_error>(vd::int_bounds::inclusive(18, 120)(bad.age), "Age {} is out of range [18, 120]", bad.age);
-    vd::require_callback<push_error>(bad.password.size() >= 8, "Password too short");
+    vd::require_cb<push_error>(!bad.username.empty(), "Username required");
+    vd::require_cb<push_error>(vd::string_rules::email_like()(bad.email), "Email invalid");
+    vd::require_cb<push_error>(vd::int_bounds::inclusive(18, 120)(bad.age), "Age {} is out of range [18, 120]", bad.age);
+    vd::require_cb<push_error>(bad.password.size() >= 8, "Password too short");
 
     ASSERT_EQ(g_errors.size(), 1u);
-    EXPECT_EQ(g_errors[0], "Age 15 is out of range [18, 120]");
+    // require_cb hands the callback the same format_fail-decorated text the throwing
+    // flavours carry, so the collected entry contains the message plus its origin.
+    EXPECT_NE(g_errors[0].find("Age 15 is out of range [18, 120]"), std::string::npos) << g_errors[0];
+    EXPECT_NE(g_errors[0].find("test_integration"), std::string::npos) << g_errors[0];
 }
 
 TEST_F(FieldErrorCollectionTest, MultipleFieldsInvalid_AllErrorsCollected)
 {
     UserRegistration bad { "", "bad-email", 15, "x" };
 
-    vd::require_callback<push_error>(!bad.username.empty(), "Username required");
-    vd::require_callback<push_error>(vd::string_rules::email_like()(bad.email), "Email invalid");
-    vd::require_callback<push_error>(vd::int_bounds::inclusive(18, 120)(bad.age), "Age invalid");
-    vd::require_callback<push_error>(bad.password.size() >= 8, "Password too short");
+    vd::require_cb<push_error>(!bad.username.empty(), "Username required");
+    vd::require_cb<push_error>(vd::string_rules::email_like()(bad.email), "Email invalid");
+    vd::require_cb<push_error>(vd::int_bounds::inclusive(18, 120)(bad.age), "Age invalid");
+    vd::require_cb<push_error>(bad.password.size() >= 8, "Password too short");
 
     EXPECT_EQ(g_errors.size(), 4u);
 }
@@ -916,6 +919,38 @@ TEST(ResultObjectTest, Failed_IsValidFalse_CarriesAllMessages)
     ASSERT_EQ(r.failed_rules.size(), 2u);
     EXPECT_EQ(r.failed_rules[0], "first error");
     EXPECT_EQ(r.failed_rules[1], "second error");
+}
+
+// _error_list has implicit ctors for const char*, std::string and std::vector<std::string>,
+// so a single message no longer needs a braced initializer.
+TEST(ResultObjectTest, Failed_AcceptsBareStringLiteral)
+{
+    auto r = vd::result::failed("single error");
+    EXPECT_FALSE(r.is_valid);
+    ASSERT_EQ(r.failed_rules.size(), 1u);
+    EXPECT_EQ(r.failed_rules[0], "single error");
+}
+
+TEST(ResultObjectTest, Failed_AcceptsStdString)
+{
+    std::string message = "runtime built error";
+    auto r = vd::result::failed(message);
+    ASSERT_EQ(r.failed_rules.size(), 1u);
+    EXPECT_EQ(r.failed_rules[0], "runtime built error");
+}
+
+TEST(ResultObjectTest, Failed_AcceptsVectorOfStrings)
+{
+    std::vector<std::string> messages { "a", "b", "c" };
+    auto r = vd::result::failed(messages);
+    ASSERT_EQ(r.failed_rules.size(), 3u);
+    EXPECT_EQ(r.failed_rules[2], "c");
+}
+
+// A failed result without a reason is a programming error, guarded by vd::require.
+TEST(ResultObjectTest, Failed_EmptyMessageList_ThrowsAssertionException)
+{
+    EXPECT_THROW((void)vd::result::failed(std::vector<std::string> {}), vd::assertion_exception);
 }
 
 TEST(ResultObjectTest, DieIfFailed_OkResult_DoesNotThrow)

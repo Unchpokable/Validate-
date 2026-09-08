@@ -1,0 +1,96 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 23,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/out/build/${presetName}"
+    },
+    {
+      "name": "core",
+      "inherits": "base",
+      "displayName": "Core library",
+      "description": "Core library and its seven test suites, no Qt extensions. On Windows, run from a Developer Command Prompt so cl.exe and the MSVC environment are on PATH."
+    },
+    {
+      "name": "qt",
+      "inherits": "base",
+      "displayName": "Core + Qt Base extension",
+      "description": "Adds the Qt Base extension and its three test suites. Qt is located through the QTDIR environment variable; set it before configuring, or override VD_QT_DIR on the command line.",
+      "cacheVariables": {
+        "VD_EXTENSION_QT_BASE": "ON",
+        "VD_QT_DIR": "$env{QTDIR}"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "core-debug",
+      "displayName": "Core - Debug",
+      "configurePreset": "core",
+      "configuration": "Debug"
+    },
+    {
+      "name": "core-release",
+      "displayName": "Core - Release",
+      "configurePreset": "core",
+      "configuration": "Release"
+    },
+    {
+      "name": "qt-debug",
+      "displayName": "Qt - Debug",
+      "configurePreset": "qt",
+      "configuration": "Debug"
+    },
+    {
+      "name": "qt-release",
+      "displayName": "Qt - Release",
+      "configurePreset": "qt",
+      "configuration": "Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "core-debug",
+      "displayName": "Core - Debug",
+      "configurePreset": "core",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "core-release",
+      "displayName": "Core - Release",
+      "configurePreset": "core",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt-debug",
+      "displayName": "Qt - Debug",
+      "configurePreset": "qt",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "qt-release",
+      "displayName": "Qt - Release",
+      "configurePreset": "qt",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

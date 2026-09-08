@@ -1,7 +1,9 @@
 #include "gtest/gtest.h"
+#include <cstdint>
 #include <gtest/gtest.h>
 #include <limits>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #define VD_EXPORT_UNSAFE
@@ -42,6 +44,14 @@ struct Address {
 struct Contact {
     Person person;
     Address address;
+};
+
+// Deliberately heterogeneous in its arithmetic member types — used to show that
+// a single vd::numeric::finite_t serves all of them.
+struct Reading {
+    double celsius;
+    float humidity;
+    std::int32_t samples;
 };
 
 // ---------------------------------------------------------------------------
@@ -850,4 +860,233 @@ TEST(StaticModelStaticsFactoryTest, WithExtensionUsingStaticsFactoryPreservesBas
     // extended checks both
     EXPECT_FALSE(extended.check(Point { 5.0, -999.0 }));
     EXPECT_TRUE(extended.check(Point { 5.0, 5.0 }));
+}
+
+// ---------------------------------------------------------------------------
+// StaticModelFiniteTest — vd::numeric::finite_t inside static_model<T, Rules...>
+//
+// vd::numeric::finite_t is an inline constexpr finite_guard — an empty type
+// whose operator() is the template, so the guard is not tied to any one value
+// type. static_model stores it inline in its rule tuple, which pins down three
+// things worth testing: no heap indirection, a constexpr-constructible model,
+// and one guard object usable across differently typed members.
+// ---------------------------------------------------------------------------
+
+TEST(StaticModelFiniteTest, FiniteSatisfiesStaticRuleFor)
+{
+    using guard_t = vd::numeric::finite_guard;
+
+    static_assert(vd::static_rule_for<guard_t, double>);
+    static_assert(vd::static_rule_for<guard_t, float>);
+    static_assert(vd::static_rule_for<guard_t, std::int32_t>);
+    static_assert(std::is_same_v<std::invoke_result_t<guard_t, const double&>, vd::result>);
+
+    // constrained on operator(), so non-arithmetic T merely fails the concept
+    static_assert(!vd::static_rule_for<guard_t, std::string>);
+    SUCCEED();
+}
+
+TEST(StaticModelFiniteTest, TopLevelRuleAcceptsFiniteValue)
+{
+    auto model = vd::make_static_model<double>().with(vd::numeric::finite_t);
+
+    EXPECT_TRUE(model.check(0.0));
+    EXPECT_TRUE(model.check(-1.5));
+    EXPECT_TRUE(model.check(std::numeric_limits<double>::max()));
+}
+
+TEST(StaticModelFiniteTest, TopLevelRuleRejectsInfinity)
+{
+    auto model = vd::make_static_model<double>().with(vd::numeric::finite_t);
+
+    EXPECT_FALSE(model.check(std::numeric_limits<double>::infinity()));
+    EXPECT_FALSE(model.check(-std::numeric_limits<double>::infinity()));
+}
+
+TEST(StaticModelFiniteTest, TopLevelRuleRejectsNaN)
+{
+    auto model = vd::make_static_model<double>().with(vd::numeric::finite_t);
+    EXPECT_FALSE(model.check(std::numeric_limits<double>::quiet_NaN()));
+}
+
+TEST(StaticModelFiniteTest, TopLevelRuleRejectsNullptr)
+{
+    auto model = vd::make_static_model<double>().with(vd::numeric::finite_t);
+    EXPECT_FALSE(model.check(static_cast<const double*>(nullptr)));
+}
+
+TEST(StaticModelFiniteTest, TopLevelRuleFailureCarriesGuardMessage)
+{
+    auto model = vd::make_static_model<double>().with(vd::numeric::finite_t);
+    vd::result res = model.check(std::numeric_limits<double>::quiet_NaN());
+
+    ASSERT_FALSE(res.is_valid);
+    ASSERT_EQ(res.failed_rules.size(), 1u);
+    EXPECT_NE(res.failed_rules[0].find("not finite"), std::string::npos);
+}
+
+TEST(StaticModelFiniteTest, ModelIsConstexprConstructible)
+{
+    // finite_guard is an empty literal type and finite_t is already a constant,
+    // so the whole model can be built in a constant expression. Only check()
+    // runs at runtime — vd::result owns a std::vector and cannot be
+    // constant-evaluated.
+    constexpr auto model = vd::make_static_model<double>().with(vd::numeric::finite_t);
+
+    EXPECT_TRUE(model.check(1.0));
+    EXPECT_FALSE(model.check(std::numeric_limits<double>::quiet_NaN()));
+}
+
+TEST(StaticModelFiniteTest, ModelStoresNoIndirection)
+{
+    // A stateless guard must not inflate the model — evidence that static_model
+    // keeps the rule inline instead of behind a std::function.
+    auto model = vd::make_static_model<double>().with(vd::numeric::finite_t);
+    static_assert(sizeof(model) == 1);
+    SUCCEED();
+}
+
+TEST(StaticModelFiniteTest, SameGuardBehavesTheSameAtFloatPrecision)
+{
+    auto model = vd::make_static_model<float>().with(vd::numeric::finite_t);
+
+    EXPECT_TRUE(model.check(1.0f));
+    EXPECT_TRUE(model.check(std::numeric_limits<float>::denorm_min()));
+    EXPECT_FALSE(model.check(std::numeric_limits<float>::infinity()));
+    EXPECT_FALSE(model.check(std::numeric_limits<float>::quiet_NaN()));
+}
+
+TEST(StaticModelFiniteTest, SameGuardAlwaysPassesIntegralValues)
+{
+    auto model = vd::make_static_model<std::int32_t>().with(vd::numeric::finite_t);
+
+    EXPECT_TRUE(model.check(0));
+    EXPECT_TRUE(model.check(std::numeric_limits<std::int32_t>::max()));
+    EXPECT_TRUE(model.check(std::numeric_limits<std::int32_t>::lowest()));
+}
+
+TEST(StaticModelFiniteTest, OneGuardServesHeterogeneousMembers)
+{
+    // The payoff of templating operator() instead of the class: the same object
+    // is handed to a double, a float and an int32 member of one model, and each
+    // rule instantiates operator() at its own member type.
+    auto model = vd::make_static_model<Reading>()
+                     .with(vd::statics::member("celsius", &Reading::celsius, vd::numeric::finite_t))
+                     .with(vd::statics::member("humidity", &Reading::humidity, vd::numeric::finite_t))
+                     .with(vd::statics::member("samples", &Reading::samples, vd::numeric::finite_t));
+
+    EXPECT_TRUE(model.check(Reading { 20.0, 0.5f, 10 }));
+    EXPECT_TRUE(model.check(Reading { 20.0, 0.5f, std::numeric_limits<std::int32_t>::max() }));
+
+    EXPECT_FALSE(model.check(Reading { std::numeric_limits<double>::quiet_NaN(), 0.5f, 10 }));
+    EXPECT_FALSE(model.check(Reading { 20.0, std::numeric_limits<float>::infinity(), 10 }));
+}
+
+TEST(StaticModelFiniteTest, HeterogeneousFailuresReportTheirOwnMemberNames)
+{
+    auto model = vd::make_static_model<Reading>()
+                     .with(vd::statics::member("celsius", &Reading::celsius, vd::numeric::finite_t))
+                     .with(vd::statics::member("humidity", &Reading::humidity, vd::numeric::finite_t));
+
+    vd::result res = model.check(Reading { std::numeric_limits<double>::infinity(), std::numeric_limits<float>::quiet_NaN(), 0 });
+
+    ASSERT_FALSE(res.is_valid);
+    ASSERT_EQ(res.failed_rules.size(), 2u);
+    EXPECT_NE(res.failed_rules[0].find("celsius"), std::string::npos);
+    EXPECT_NE(res.failed_rules[1].find("humidity"), std::string::npos);
+}
+
+TEST(StaticModelFiniteTest, StaticsMemberCheckerAcceptsFiniteValue)
+{
+    auto model = vd::make_static_model<Point>().with(vd::statics::member(&Point::x, vd::numeric::finite_t));
+
+    EXPECT_TRUE(model.check(Point { 1.0, 0.0 }));
+    EXPECT_FALSE(model.check(Point { std::numeric_limits<double>::quiet_NaN(), 0.0 }));
+}
+
+TEST(StaticModelFiniteTest, StaticsFieldCheckerViaGetter)
+{
+    auto model = vd::make_static_model<Point>().with(vd::statics::field("get_y", &Point::get_y, vd::numeric::finite_t));
+
+    EXPECT_TRUE(model.check(Point { 0.0, 1.0 }));
+    EXPECT_FALSE(model.check(Point { 0.0, std::numeric_limits<double>::infinity() }));
+}
+
+TEST(StaticModelFiniteTest, RuleFactoryAndStaticsFactoryAgree)
+{
+    // vd::member wraps the guard in a vd::rule<T>; vd::statics::member keeps it
+    // allocation-free. Only the storage strategy differs, never the verdict.
+    auto rule_model = vd::make_static_model<Point>().with(vd::member(&Point::x, vd::numeric::finite_t));
+    auto raw_model = vd::make_static_model<Point>().with(vd::statics::member(&Point::x, vd::numeric::finite_t));
+
+    for(const Point& p : { Point { 1.0, 0.0 },
+            Point { std::numeric_limits<double>::quiet_NaN(), 0.0 },
+            Point { std::numeric_limits<double>::infinity(), 0.0 } }) {
+        EXPECT_EQ(rule_model.check(p).is_valid, raw_model.check(p).is_valid);
+    }
+}
+
+TEST(StaticModelFiniteTest, CheckAggregatesEveryNonFiniteMember)
+{
+    auto model = vd::make_static_model<Point>()
+                     .with(vd::statics::member("x", &Point::x, vd::numeric::finite_t))
+                     .with(vd::statics::member("y", &Point::y, vd::numeric::finite_t));
+
+    vd::result res = model.check(Point { std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity() });
+
+    EXPECT_FALSE(res.is_valid);
+    EXPECT_EQ(res.failed_rules.size(), 2u);
+}
+
+TEST(StaticModelFiniteTest, ShortCheckStopsAtFirstNonFiniteMember)
+{
+    auto model = vd::make_static_model<Point>()
+                     .with(vd::statics::member("x", &Point::x, vd::numeric::finite_t))
+                     .with(vd::statics::member("y", &Point::y, vd::numeric::finite_t));
+
+    vd::result res = model.short_check(Point { std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity() });
+
+    EXPECT_FALSE(res.is_valid);
+    EXPECT_EQ(res.failed_rules.size(), 1u);
+    EXPECT_NE(res.failed_rules[0].find("x"), std::string::npos);
+}
+
+TEST(StaticModelFiniteTest, MixesWithBoundsRules)
+{
+    // finite screens out NaN/inf before the bounds rule interprets them; NaN
+    // fails both because every comparison against it is false.
+    auto model = vd::make_static_model<Point>()
+                     .with(vd::statics::member("x", &Point::x, vd::numeric::finite_t))
+                     .with(vd::statics::member("x", &Point::x, vd::double_bounds::inclusive(0.0, 10.0)));
+
+    EXPECT_TRUE(model.check(Point { 5.0, 0.0 }));
+    EXPECT_EQ(model.check(Point { std::numeric_limits<double>::quiet_NaN(), 0.0 }).failed_rules.size(), 2u);
+    EXPECT_EQ(model.check(Point { 50.0, 0.0 }).failed_rules.size(), 1u);
+}
+
+TEST(StaticModelFiniteTest, DieIfFailedThrowsOnNonFiniteValue)
+{
+    auto model = vd::make_static_model<Point>().with(vd::statics::member(&Point::x, vd::numeric::finite_t));
+
+    EXPECT_NO_THROW(model.die_if_failed(Point { 1.0, 0.0 }));
+    EXPECT_THROW(model.die_if_failed(Point { std::numeric_limits<double>::infinity(), 0.0 }), vd::validation_exception);
+}
+
+TEST(StaticModelFiniteTest, ValidateManyRejectsBatchWithNonFiniteMember)
+{
+    auto model = vd::make_static_model<Point>().with(vd::statics::member(&Point::x, vd::numeric::finite_t));
+
+    EXPECT_TRUE(vd::validate_many(model, Point { 1.0, 0.0 }, Point { 2.0, 0.0 }));
+    EXPECT_FALSE(vd::validate_many(model, Point { 1.0, 0.0 }, Point { std::numeric_limits<double>::quiet_NaN(), 0.0 }));
+}
+
+TEST(StaticModelFiniteTest, WithExtensionPreservesBaseModel)
+{
+    auto base = vd::make_static_model<Point>().with(vd::statics::member("x", &Point::x, vd::numeric::finite_t));
+    auto extended = base.with(vd::statics::member("y", &Point::y, vd::numeric::finite_t));
+
+    // base only screens x — a non-finite y must still pass it
+    EXPECT_TRUE(base.check(Point { 1.0, std::numeric_limits<double>::infinity() }));
+    EXPECT_FALSE(extended.check(Point { 1.0, std::numeric_limits<double>::infinity() }));
+    EXPECT_TRUE(extended.check(Point { 1.0, 2.0 }));
 }

@@ -243,11 +243,13 @@ An `std::regex` pattern is runtime data (a string). So `regex_checker` stores th
 
 ### Invalid pattern
 
-On an invalid pattern, `std::regex` throws `std::regex_error`. This exception is caught and translated into `vd::require(false, ...)` → `std::abort()` with a diagnostic message on `stderr`.
+On an invalid pattern, `std::regex` throws `std::regex_error`. This exception is caught and translated into `vd::require(false, ...)` → throws `vd::assertion_exception` carrying the pattern, the `std::regex_error` code and the call site.
 
 ```cpp
+// throws at construction, not on the first check:
 auto bad = vd::string_rules::regex("[invalid");
-bad("anything");  // -> abort: "Invalid regex pattern: [invalid. Error code: N"
+// vd::assertion_exception: "Assertion failed: Invalid regex pattern: [invalid. Error code: N"
+//                          + File / Line / Function of this call
 ```
 
 ---

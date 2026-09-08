@@ -3,11 +3,38 @@
 #ifndef VD_CORE_RESULT_HXX
 #define VD_CORE_RESULT_HXX
 
+#include <initializer_list>
 #include <string>
 #include <vector>
 
 namespace vd
 {
+struct _error_list final {
+    _error_list(const char* message) : m_messages { message }
+    {
+    }
+
+    _error_list(std::string message) : m_messages { std::move(message) }
+    {
+    }
+
+    _error_list(std::vector<std::string> messages) : m_messages(std::move(messages))
+    {
+    }
+
+    _error_list(std::initializer_list<std::string> messages) : m_messages(messages)
+    {
+    }
+
+    const std::vector<std::string>& messages() const noexcept
+    {
+        return m_messages;
+    }
+
+private:
+    std::vector<std::string> m_messages;
+};
+
 struct result {
     bool is_valid { true };
     std::vector<std::string> failed_rules {};
@@ -37,7 +64,7 @@ struct result {
 
     static result ok();
 
-    static result failed(std::vector<std::string> failed_rules);
+    static result failed(_error_list failed_rules);
 
     explicit operator bool() const;
 };

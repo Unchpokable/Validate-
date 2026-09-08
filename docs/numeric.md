@@ -8,7 +8,10 @@
 
 ## Purpose
 
-The module provides `numeric_bounds<T>` — a checker for numeric types, implementing the `value_checker` concept. Used as the second argument to `vd::field` / `vd::member`.
+The module provides two checkers for numeric types, both implementing the `value_checker` concept and both intended as the second argument to `vd::field` / `vd::member`:
+
+- `numeric_bounds<T>` — range checks (inclusive/exclusive, one-sided, outside-range);
+- `finite_guard` (as the ready-made object `vd::numeric::finite_t`) — rejects `NaN` and `inf`.
 
 ---
 
@@ -131,24 +134,97 @@ age_model.with(vd::predicate([](const int& v) { return v > 0 && v < 150; }));
 
 ---
 
-## `vd::numeric::finite()`
+## `vd::numeric::finite_guard` / `vd::numeric::finite_t`
 
 ```cpp
 namespace vd::numeric {
-    template<numeric_compatible T>
-    vd::rule<T> finite();
+    struct finite_guard final {
+        template<numeric_compatible T>
+        vd::result operator()(const T& value) const;
+    };
+
+    inline constexpr auto finite_t = finite_guard {};
 }
 ```
 
-Returns a rule that checks `std::isfinite(value)`. Applied to floating-point fields to filter out `NaN` and `inf`:
+A checker that verifies `std::isfinite(value)` — used to keep `NaN` and `inf` out of floating-point fields. Note that the API is an *object*, not a factory: there is no `finite<T>()` call, you pass `vd::numeric::finite_t` directly.
 
 ```cpp
 auto model = vd::basic_model<Measurement>()
-    .with(vd::member(&Measurement::value, vd::double_bounds::greater_than(0.0)))
-    .with(vd::numeric::finite<double>());
+    .with(vd::member(&Measurement::value, vd::numeric::finite_t))
+    .with(vd::member(&Measurement::value, vd::double_bounds::greater_than(0.0)));
 ```
 
-The `std::isfinite(const T& value)` rule is always `true` if `T` is an integral type.
+For an integral `T` the check is always `true` — `std::isfinite` on an integer promotes to `double` and can never yield `inf`/`NaN`. Keeping integral types accepted rather than rejected means the guard can be applied uniformly to a struct whose members are a mix of `double`, `float` and `int` without any per-member special-casing.
+
+### Why the class is not a template
+
+`finite_guard` templates its `operator()`, not itself. Three consequences follow, and all three are the reason for the design:
+
+**A single object serves every arithmetic type.** `finite_t` is one `inline constexpr` instance shared across the whole program, and the same object can be handed to a `double` member, a `float` member and an `int32_t` member of the same model — each rule instantiates `operator()` at its own member type:
+
+```cpp
+struct Reading {
+    double celsius;
+    float humidity;
+    std::int32_t samples;
+};
+
+auto model = vd::make_static_model<Reading>()
+    .with(vd::statics::member("celsius",  &Reading::celsius,  vd::numeric::finite_t))
+    .with(vd::statics::member("humidity", &Reading::humidity, vd::numeric::finite_t))
+    .with(vd::statics::member("samples",  &Reading::samples,  vd::numeric::finite_t));
+```
+
+**The `numeric_compatible` constraint became SFINAE-friendly.** Because the constraint sits on `operator()` rather than on the class, an unsuitable `T` makes the *concept* fail instead of hard-erroring inside an instantiation:
+
+```cpp
+static_assert( vd::value_checker<vd::numeric::finite_guard, double>);
+static_assert(!vd::value_checker<vd::numeric::finite_guard, std::string>);
+```
+
+That means the guard can participate in overload resolution and in `requires`-clauses without taking the program down.
+
+**The guard is empty and trivially copyable**, so `static_model` stores it inline in its rule tuple with no indirection at all, and the resulting model is constexpr-constructible:
+
+```cpp
+constexpr auto model = vd::make_static_model<double>().with(vd::numeric::finite_t);
+static_assert(sizeof(model) == 1);   // the rule occupies no storage
+```
+
+Only `check()` runs at runtime: `vd::result` owns a `std::vector<std::string>`, so it cannot be constant-evaluated even when the model itself is a constant.
+
+### As a top-level rule
+
+With `static_model` the guard is passed straight to `.with()` — `static_rule_for<finite_guard, T>` is satisfied and the rule is stored as-is:
+
+```cpp
+auto model = vd::make_static_model<double>().with(vd::numeric::finite_t);
+```
+
+With `basic_model` the guard must be wrapped in an explicitly typed `vd::rule<T>`:
+
+```cpp
+auto model = vd::basic_model<double>{}.with(vd::rule<double>(vd::numeric::finite_t));
+```
+
+**`vd::predicate` does not work here.** It deduces `T` through `detail::first_arg_of`, which is defined as `first_arg_of<decltype(&Fn::operator())>` — and a templated `operator()` names an overload set, not a single function, so its address cannot be taken. The error is a hard one, raised outside the immediate context, so it is not detectable via SFINAE either. This is the same limitation already noted for generic lambdas in the `vd::predicate` documentation: *for generic lambdas or `std::function`, construct `rule<T>` directly*.
+
+The wrap is therefore what pins the value type down — and since the guard is stateless, the same object can be pinned at several types at once:
+
+```cpp
+auto as_double = vd::basic_model<double>{}      .with(vd::rule<double>(vd::numeric::finite_t));
+auto as_float  = vd::basic_model<float>{}       .with(vd::rule<float>(vd::numeric::finite_t));
+auto as_int    = vd::basic_model<std::int32_t>{}.with(vd::rule<std::int32_t>(vd::numeric::finite_t));
+```
+
+### Failure message
+
+```
+Value is not finite: nan
+```
+
+Wrapped in `vd::member` / `vd::field` with a name, it becomes `Member <name> failed: Value is not finite: nan`.
 
 ---
 
