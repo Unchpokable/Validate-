@@ -265,10 +265,28 @@ TEST(QStringRulesRegexTest, WorksWithQStringView)
     EXPECT_TRUE(checker(QStringView(data)));
 }
 
-TEST(QStringRulesRegexDeathTest, InvalidPatternAborts)
+TEST(QStringRulesRegexTest, InvalidPatternThrowsAssertionException)
 {
-    // An invalid regex pattern must trigger vd::require and abort.
-    EXPECT_DEATH(vd::qt::string_rules::regex("[invalid"), "");
+    // An invalid regex pattern trips vd::require, which now throws instead of aborting.
+    EXPECT_THROW((void)vd::qt::string_rules::regex("[invalid"), vd::assertion_exception);
+}
+
+TEST(QStringRulesRegexTest, InvalidPatternMessageMentionsThePattern)
+{
+    try {
+        (void)vd::qt::string_rules::regex("[invalid");
+        FAIL() << "expected vd::assertion_exception";
+    }
+    catch(const vd::assertion_exception& e) {
+        const std::string what = e.what();
+        EXPECT_NE(what.find("Invalid regex pattern"), std::string::npos) << what;
+        EXPECT_NE(what.find("[invalid"), std::string::npos) << what;
+    }
+}
+
+TEST(QStringRulesRegexTest, ValidPatternDoesNotThrow)
+{
+    EXPECT_NO_THROW((void)vd::qt::string_rules::regex(R"(\d+)"));
 }
 
 // ---------------------------------------------------------------------------

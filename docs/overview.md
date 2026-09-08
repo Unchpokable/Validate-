@@ -5,7 +5,7 @@
 **Validate!** is a header-first C++20 library for declarative data validation.
 The idea: describe the validation rules for an object once, through a *model*, and then apply it to any number of objects.
 
-The library is not fully header-only: most of the API is template code in headers, but the non-template parts (`vd::detail::assert_fail`, `vd::result`, `regex_checker`/`regex()` from `string_rules`) are moved into `.cxx` files and built into a static library `vd` (`add_library(vd STATIC ...)` in `CMakeLists.txt`). When consumed via `FetchContent`, linking (`target_link_libraries(... Validate::vd)`) is required — just including `<vd.hxx>` without linking is not enough.
+The library is not fully header-only: most of the API is template code in headers, but the non-template parts (`vd::detail::assert_fail`/`format_fail`, `vd::result`, `regex_checker`/`regex()` from `string_rules`) are moved into `.cxx` files and built into a static library `vd` (`add_library(vd STATIC ...)` in `CMakeLists.txt`). When consumed via `FetchContent`, linking (`target_link_libraries(... Validate::vd)`) is required — just including `<vd.hxx>` without linking is not enough.
 
 ```cpp
 struct User {
@@ -50,8 +50,8 @@ src/
 ├── vd_ext.hxx                 # re-export: Qt extensions (VD_ENABLE_EXTENSION_QT_BASE / _QT_WIDGETS / _QT_QML)
 │
 ├── assert/
-│   ├── vd_assert.hxx          # Implementation of vd::require / vd::require_callback / vd::ct_require
-│   └── vd_assert.cxx          # Implementation of vd::details::assert_fail
+│   ├── vd_assert.hxx          # vd::strict_require / vd::require / vd::require_cb / vd::ct_require
+│   └── vd_assert.cxx          # Implementation of vd::detail::format_fail / assert_fail
 │
 ├── core/
 │   ├── vd_result.hxx          # vd::result — declaration (data + method signatures)
@@ -76,7 +76,7 @@ src/
 ├── utils/
 │   ├── vd_ctnextafter.hxx     # constexpr ct_nextafter<T> + concept generic_numer
 │   ├── vd_overload.hxx        # vd::overloaded<Ts...> — helper for std::visit; unused elsewhere in the library
-│   └── vd_sourceloc.hxx       # vd::here() — consteval wrapper around source_location::current(); not called anywhere
+│   └── vd_sourceloc.hxx       # vd::here() + opt-in std::formatter<source_location>; not in <vd.hxx>, include directly
 │
 └── inline_deps/
     └── ctre.hpp               # Compile-Time Regular Expressions (CTRE)
@@ -91,7 +91,7 @@ ext/qt/
     └── vd_qproperty.hxx       # qt_property() for Q_PROPERTY
 
 tests/
-├── test_assert.cxx            # Tests for vd::require / vd::ct_require
+├── test_assert.cxx            # Tests for the vd::require family / vd::ct_require
 ├── test_models.cxx            # Tests for rule, basic_model, numeric_bounds, finite_guard
 ├── test_static_model.cxx      # Tests for static_model<T, Rules...>
 ├── test_string_rules.cxx      # Tests for string_rules, including CharT generalization and length rules
