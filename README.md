@@ -89,8 +89,33 @@ target_link_libraries(my_target PRIVATE Validate::vd Qt6::Core)
 
 ## Building and running tests
 
+Presets are the shortest path. `core` builds the library and its seven test suites; `qt` adds the Qt Base extension and its three, locating Qt through the `QTDIR` environment variable:
+
 ```bash
-cmake -B build
+cmake --preset core          # or: cmake --preset qt
+cmake --build --preset core-debug
+ctest --preset core-debug
+```
+
+Each configure preset has `-debug` and `-release` build and test presets (`core-debug`, `core-release`, `qt-debug`, `qt-release`) and builds into `out/build/<preset>`. They use the `Ninja Multi-Config` generator, so on Windows run them from a Developer Command Prompt — `cl.exe` has to be on `PATH`.
+
+Alternatively, the scripts in `scripts/` configure, build, and run every suite in one step, and resolve the Qt DLL path for the test run themselves:
+
+```powershell
+.\scripts\build_and_test.ps1                                        # core only
+.\scripts\build_and_test.ps1 -QtDir "C:\Qt\6.9.2\msvc2022_64"       # with Qt
+.\scripts\build_and_test.ps1 -Config Release
+```
+
+```bash
+./scripts/build_and_test.sh
+./scripts/build_and_test.sh Debug /path/to/Qt6
+```
+
+They build into `build/`, separate from the presets' `out/build/`, so the two never share a cache. Plain CMake works too, if you want a generator of your own choosing:
+
+```bash
+cmake -B build -DVD_EXTENSION_QT_BASE=ON -DVD_QT_DIR=/path/to/Qt6
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```

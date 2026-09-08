@@ -27,4 +27,6 @@ CMakeUserPresets.json
 # Visual Studio scrap
 .vs/
 /.vs/
-CmakePresets.json
+
+# Build tree used by the CMake presets (scripts/ use build/ above)
+out/

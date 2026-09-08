@@ -65,7 +65,7 @@ Enforced by `.clang-format`. Run `clang-format -i <file>` on changed `.hxx`/`.cx
 
 ## Tests
 
-GTest 1.14.0 via FetchContent (no separate install needed). 5 core test executables + 3 Qt test executables (built only when `VD_EXTENSION_QT_BASE=ON`). Test files live in `tests/` and are named `test_*.cxx`.
+GTest 1.14.0 via FetchContent (no separate install needed). 7 core test executables + 3 Qt test executables (built only when `VD_EXTENSION_QT_BASE=ON`). Test files live in `tests/` and are named `test_*.cxx`.
 
 ## Dependencies
 
