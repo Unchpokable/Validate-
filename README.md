@@ -30,7 +30,7 @@ vd::result r = user_model.check(u);  // r.is_valid == true
 - **Type-safe rule factories** — `vd::member`, `vd::field`, `vd::predicate` (and `vd::statics::member`/`vd::statics::field` for `static_model`) with full template argument deduction; optional field names in error messages
 - **Numeric bounds** — inclusive/exclusive ranges, one-sided bounds, and outside-range checks for all arithmetic types
 - **String checkers** — compile-time patterns via [CTRE](https://github.com/hanickadot/compile-time-regular-expressions), runtime `std::regex`, length checks (`min_length`, `max_length`, `length_in_between`), and common presets (`email_like`, `uri_like`, `non_empty`, …); most checkers work with any `std::basic_string_view<CharT>` / `std::basic_string<CharT>`, not just `std::string`
-- **Modern assertions** — `vd::require` with `std::format` messages, source-location diagnostics, optional exception throwing, and custom callbacks
+- **Modern assertions** — the `vd::require` family with `std::format` messages and source-location diagnostics: throwing by default, `vd::strict_require` to abort, `vd::require_cb` for custom callbacks, and debug-only counterparts that vanish in release
 - **Monadic checkers** — `vd::monadic::not_empty` for `std::optional<T>` and `vd::monadic::as_expected` for `std::expected<T, E>` (C++23, feature-test gated); the wrapped types are deduced from the argument, so one shared object serves every specialization
 - **Non-null pointer contract** — `vd::not_null<T*>` enforces that a raw pointer parameter is never `nullptr`, checked at compile time or runtime; `vd::memory::not_null` is the model-rule counterpart for pointer-like fields
 - **Qt extension** — `QString` / `QStringView` checkers (including length checks) and `Q_PROPERTY` validation for Qt 5/6 projects
@@ -269,31 +269,36 @@ The check is `has_value()`, not truthiness — an engaged `optional<int>{0}` or 
 
 ### `vd::require`
 
-`vd::require` is a type-safe, source-aware replacement for `assert()`.
+The `vd::require` family is a type-safe, source-aware replacement for `assert()`. The flavours differ only in what happens on failure — the message is built and decorated identically by all of them.
 
 ```cpp
-// Abort on failure — prints file, line, function to stderr
+// Throw on failure — vd::assertion_exception
 vd::require(ptr != nullptr, "Expected non-null pointer in {}", __func__);
 
-// Throw on failure — exception.what() contains the formatted message only
+// Throw a type of your choice
 vd::require<std::runtime_error>(value > 0, "Value must be positive, got {}", value);
+
+// Abort on failure — prints to stderr, then std::abort()
+vd::strict_require(ptr != nullptr, "Expected non-null pointer in {}", __func__);
 
 // Custom callback on failure (zero-overhead NTTP, receives std::string_view)
 void my_logger(std::string_view msg) { /* … */ }
-vd::require_callback<my_logger>(ok, "Validation failed: {}", reason);
+vd::require_cb<my_logger>(ok, "Validation failed: {}", reason);
 ```
 
 The format string is checked at compile time via `std::format_string`. Source location is captured at the call site — diagnostics always point to your code, not library internals.
 
-**Output on abort:**
+**Message on failure** — the same text whether it is thrown, printed or handed to a callback:
 ```
 Assertion failed: Expected non-null pointer in foo
-File: src/foo.cpp
+File: src/foo.cxx
 Line: 42
 Function: void foo()
 ```
 
-**Debug-only overloads** (`required`, `require_callbackd`) compile to no-ops when `_NDEBUG` is defined.
+**Debug-only counterparts** (`strict_required`, `required`, `require_cbd`) behave identically in a debug build and compile to no-ops in release — so their condition is not evaluated there and must not carry side effects. A build counts as release if any of `NDEBUG`, `_NDEBUG` or `RELEASE` is defined.
+
+`vd::ct_require<E>` is the `constexpr`-usable flavour: in a constant-evaluated context a failed check makes the call a non-constant expression, i.e. a compile error. See [docs/assert.md](docs/assert.md) for the full reference.
 
 ### Qt extension
 
